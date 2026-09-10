@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>新股摇号抽签仪式主持稿生成器</title>
 <meta name="description" content="输入中签率，自动按数位拆解，生成新股摇号抽签仪式主持稿">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ctext x='32' y='45' font-family='Arial,Helvetica,sans-serif' font-size='38' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E">
 <style>
 :root{
   --blue:#2563eb;
@@ -91,6 +92,7 @@ tr.total td{background:#f8fbff;font-weight:600}
 .segment{padding:8px 0}
 .segment h3{font-size:1.12rem;color:var(--blue-dark);margin-bottom:10px}
 .segment p{font-size:1.12rem;line-height:2.05;text-indent:2em;margin-bottom:6px}
+.segment p.dots{text-indent:0;color:var(--muted);letter-spacing:.15em}
 .divider{border:none;border-top:1px solid var(--line);margin:18px 0}
 
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
@@ -127,17 +129,17 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 <section class="card input-card no-print">
   <div class="field-row">
     <label for="rateInput">中签率（%）</label>
-    <input id="rateInput" type="text" inputmode="decimal" value="0.178925" placeholder="例如：0.178925" autocomplete="off" spellcheck="false">
+    <input id="rateInput" type="text" inputmode="decimal" value="0.0181348368" placeholder="例如：0.0181348368" autocomplete="off" spellcheck="false">
     <button class="btn" id="genBtn" type="button">生成主持稿</button>
   </div>
   <div class="examples">
     快捷示例：
-    <button class="chip" type="button" data-v="0.129">0.129%</button>
-    <button class="chip" type="button" data-v="0.0456">0.0456%</button>
-    <button class="chip" type="button" data-v="0.03">0.03%</button>
+    <button class="chip" type="button" data-v="0.178925">0.178925%</button>
+    <button class="chip" type="button" data-v="0.999999">0.999999%</button>
+    <button class="chip" type="button" data-v="0.0181348368">0.0181348368%</button>
   </div>
   <div class="error" id="errorBox" role="alert"></div>
-  <div class="hint">支持 0.000001% – 0.999999%（最小精确到亿分之一，即小数点后 6 位）；点击按钮或按回车生成。</div>
+  <div class="hint">支持 0.0000000001% – 0.9999999999%（最小支持万亿分之一，即小数点后 10 位）；点击按钮或按回车生成。</div>
 </section>
 
 <section id="outputArea" style="display:none">
@@ -161,14 +163,14 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 /* ============ 基础常量与纯逻辑（不含 DOM，可独立测试） ============ */
 
 var CN_DIGITS = ['零','一','二','三','四','五','六','七','八','九'];
-var DENOM_NAMES = {3:'千', 4:'万', 5:'十万', 6:'百万', 7:'千万', 8:'亿'};
+var DENOM_NAMES = {3:'千', 4:'万', 5:'十万', 6:'百万', 7:'千万', 8:'亿', 9:'十亿', 10:'百亿', 11:'千亿', 12:'万亿'};
 var SPLIT_MAP = {3:[2,1], 6:[5,1], 7:[5,2], 9:[5,4]};
 
-/* 阿拉伯数字转中文读法，支持到亿级 */
+/* 阿拉伯数字转中文读法，支持到万亿级 */
 function numToChinese(n){
   if(n === 0) return '零';
   var smallUnits = ['', '十', '百', '千'];
-  var bigUnits = ['', '万', '亿'];
+  var bigUnits = ['', '万', '亿', '万亿'];
   var sections = [];
   var x = n;
   while(x > 0){ sections.push(x % 10000); x = Math.floor(x / 10000); }
@@ -204,18 +206,18 @@ function parsePercent(raw){
   var intPart = parts[0];
   var decRaw = parts[1] || '';
   var decPart = decRaw.replace(/0+$/, '');
-  if(decPart.length > 6) return {ok:false, error:'精度超出支持范围（最小到亿分之一，最多支持小数点后6位）'};
+  if(decPart.length > 10) return {ok:false, error:'精度超出支持范围（最小到万亿分之一）'};
   var intVal = Number(intPart);
   if(intVal >= 100) return {ok:false, error:'中签率必须小于 100（%）'};
-  if(intVal >= 1) return {ok:false, error:'当前仅支持小于 1% 的中签率（千分位至亿分位）'};
-  var padded = (decPart + '000000').slice(0, 6);
+  if(intVal >= 1) return {ok:false, error:'当前仅支持小于 1% 的中签率（千分位至万亿分位）'};
+  var padded = (decPart + '0000000000').slice(0, 10);
   var digits = padded.split('').map(function(c){ return c.charCodeAt(0) - 48; });
   if(digits.every(function(d){ return d === 0; })) return {ok:false, error:'中签率必须大于 0'};
   return {
     ok:true,
-    digits:digits,                          /* digits[0]→千分位 … digits[5]→亿分位 */
+    digits:digits,                          /* digits[0]→千分位 … digits[9]→万亿分位 */
     normStr:'0.' + padded.replace(/0+$/, ''),
-    scaled:Number(padded)                   /* 以 10^-6 % 为单位的整数值，用于合计校验 */
+    scaled:Number(padded)                   /* 以 10^-10 % 为单位的整数值，用于合计校验 */
   };
 }
 
@@ -224,7 +226,7 @@ function buildPlan(digits){
   var steps = [];
   digits.forEach(function(d, i){
     if(d === 0) return;                     /* 数字为 0 的位直接跳过 */
-    var N = i + 3;                          /* 千分位=3位 … 亿分位=8位 */
+    var N = i + 3;                          /* 千分位=3位 … 万亿分位=12位 */
     var base = Math.pow(10, N);
     var step = {
       N:N,
@@ -251,10 +253,10 @@ function buildPlan(digits){
   return steps;
 }
 
-/* 合计校验：各环节贡献之和（10^-6 % 整数单位）应与输入一致 */
+/* 合计校验：各环节贡献之和（10^-10 % 整数单位）应与输入一致 */
 function scaledSum(steps){
   return steps.reduce(function(sum, st){
-    return sum + st.digit * Math.pow(10, 8 - st.N);
+    return sum + st.digit * Math.pow(10, 12 - st.N);
   }, 0);
 }
 
@@ -279,6 +281,7 @@ function buildSegments(steps){
       var fB = DENOM_NAMES[st.N] + '分之' + CN_DIGITS[pb.m];
       paras.push('下面我们摇出' + st.frac + '的中签号码。将' + st.frac + '拆分成' + fA + '和' + fB + '。');
       paras.push('首先我们摇出' + fA + '的中签号码，' + partSentence(st.N, pa.m, pa.interval));
+      paras.push('......');
       paras.push('下面我们摇出' + fB + '的中签号码，' + partSentence(st.N, pb.m, pb.interval));
     }
     paras.push('凡申购号码末' + st.N + '位数与以上产生的号码相同即中签。');
@@ -345,7 +348,9 @@ if(typeof document !== 'undefined'){
     segments.forEach(function(seg, i){
       if(i > 0) html += '<hr class="divider">';
       html += '<div class="segment"><h3>' + esc(seg.title) + '</h3>';
-      seg.paras.forEach(function(p){ html += '<p>' + esc(p) + '</p>'; });
+      seg.paras.forEach(function(p){
+        html += p === '......' ? '<p class="dots">......</p>' : '<p>' + esc(p) + '</p>';
+      });
       html += '</div>';
     });
     scriptDoc.innerHTML = html;
