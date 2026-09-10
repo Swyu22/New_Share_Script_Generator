@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>新股摇号抽签仪式主持稿生成器</title>
-<meta name="description" content="输入中签率，自动按数位拆解，生成新股摇号抽签仪式主持稿">
+<meta name="description" content="填写发行信息与中签率，按数位自动拆解，生成完整的新股摇号抽签仪式主持稿">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Ctext x='32' y='45' font-family='Arial,Helvetica,sans-serif' font-size='38' font-weight='bold' fill='%23ffffff' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -27,7 +27,7 @@ body{
   line-height:1.6;
   -webkit-font-smoothing:antialiased;
 }
-.container{max-width:880px;margin:0 auto;padding:24px 16px 64px}
+.container{max-width:960px;margin:0 auto;padding:24px 16px 64px}
 
 header.site{text-align:center;padding:26px 0 20px}
 header.site h1{font-size:1.65rem;letter-spacing:.06em;color:var(--blue-dark)}
@@ -41,67 +41,63 @@ header.site p{color:var(--muted);font-size:.9rem;margin-top:6px}
 }
 
 /* 输入区 */
-.input-card{padding:22px;margin-bottom:22px}
-.field-row{display:flex;gap:10px;flex-wrap:wrap}
-.field-row label{width:100%;font-weight:600;font-size:.95rem}
-#rateInput{
-  flex:1;min-width:200px;
-  padding:12px 14px;
-  font-size:1.05rem;
-  border:1.5px solid var(--line);
-  border-radius:8px;
-  outline:none;
-  transition:border-color .15s;
+.input-card{padding:20px 22px;margin-bottom:22px}
+fieldset{border:1px solid var(--line);border-radius:10px;padding:14px 16px 16px;margin-bottom:14px}
+legend{font-weight:600;color:var(--blue-dark);padding:0 6px;font-size:.95rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 14px}
+.fld label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+.fld input,.fld select{
+  width:100%;padding:9px 11px;font-size:.95rem;
+  border:1.5px solid var(--line);border-radius:8px;outline:none;
+  transition:border-color .15s;background:#fff;
 }
-#rateInput:focus{border-color:var(--blue)}
+.fld input:focus,.fld select:focus{border-color:var(--blue)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn{
   cursor:pointer;border:none;border-radius:8px;
-  font-size:1rem;padding:12px 22px;
+  font-size:1rem;padding:11px 22px;
   background:var(--blue);color:#fff;
   transition:background .15s;
 }
 .btn:hover{background:var(--blue-dark)}
 .btn.ghost{background:#fff;color:var(--blue-dark);border:1.5px solid var(--blue-100)}
 .btn.ghost:hover{border-color:var(--blue);background:var(--blue-50)}
-.examples{margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
-.chip{
-  cursor:pointer;border:1px solid var(--blue-100);
-  background:var(--blue-50);color:var(--blue-dark);
-  border-radius:999px;padding:4px 14px;font-size:.85rem;
-  transition:background .15s;
-}
-.chip:hover{background:var(--blue-100)}
 .error{margin-top:10px;color:var(--red);font-size:.9rem;min-height:1.2em}
 .hint{margin-top:2px;color:var(--muted);font-size:.8rem}
 
 /* 总览表 */
 .overview{padding:20px 22px;margin-bottom:22px}
 .overview h2{font-size:1.05rem;margin-bottom:12px;color:var(--blue-dark)}
+.overview .note{margin-top:10px;color:var(--muted);font-size:.82rem}
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:.9rem;white-space:nowrap}
-th,td{border:1px solid var(--line);padding:8px 12px;text-align:center}
+table{width:100%;border-collapse:collapse;font-size:.88rem;white-space:nowrap}
+th,td{border:1px solid var(--line);padding:7px 11px;text-align:center}
 th{background:var(--blue-50);color:var(--blue-dark);font-weight:600}
 tr.total td{background:#f8fbff;font-weight:600}
+tr.hidden-step td{color:var(--muted);background:#fafbfd}
 .ok{color:var(--green)}
 
-/* 主持稿正文 */
-.script-doc{padding:34px 38px;font-family:"Songti SC","STSong","SimSun",serif}
-.doc-head{text-align:center;margin-bottom:20px}
-.doc-head h2{font-size:1.5rem;letter-spacing:.12em}
-.doc-head .rate-line{color:var(--muted);margin-top:6px;font-size:1rem}
-.segment{padding:8px 0}
-.segment h3{font-size:1.12rem;color:var(--blue-dark);margin-bottom:10px}
-.segment p{font-size:1.12rem;line-height:2.05;text-indent:2em;margin-bottom:6px}
-.segment p.dots{text-indent:0;color:var(--muted);letter-spacing:.15em}
-.divider{border:none;border-top:1px solid var(--line);margin:18px 0}
+/* 主持稿正文：逐字复刻模板（红=计算值，绿=提示语），保留原文空格 */
+.script-doc{
+  padding:34px 38px;
+  font-family:"Songti SC","STSong","SimSun",serif;
+}
+.script-doc p{
+  font-size:1.06rem;line-height:1.9;
+  white-space:pre-wrap;
+  margin:0;
+}
+.script-doc p.blank{line-height:1.2}
+.script-doc .v{color:#FF0000}
+.script-doc .g{color:#228B22}
 
-.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 
 @media (max-width:600px){
   header.site h1{font-size:1.3rem}
-  .script-doc{padding:24px 18px}
-  .segment p{font-size:1.05rem;line-height:1.95}
+  .script-doc{padding:22px 16px}
+  .script-doc p{font-size:.98rem}
   .actions{justify-content:stretch}
   .actions .btn{flex:1}
 }
@@ -111,10 +107,10 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   .no-print{display:none !important}
   .container{max-width:none;padding:0}
   .card{border:none;box-shadow:none;padding:0;margin:0 0 16px}
-  .script-doc{padding:0}
+  .script-doc{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .overview h2{font-size:12pt}
   table{font-size:10pt}
-  .segment p{font-size:12pt;line-height:1.9}
+  .script-doc p{font-size:12pt;line-height:1.85}
 }
 </style>
 </head>
@@ -123,33 +119,60 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 
 <header class="site no-print">
   <h1>新股摇号抽签仪式主持稿生成器</h1>
-  <p>输入中签率，按数位自动拆解，一键生成摇号主持稿</p>
+  <p>填写发行信息与中签率，自动生成完整摇号抽签仪式主持稿</p>
 </header>
 
 <section class="card input-card no-print">
-  <div class="field-row">
-    <label for="rateInput">中签率（%）</label>
-    <input id="rateInput" type="text" inputmode="decimal" value="0.0181348368" placeholder="例如：0.0181348368" autocomplete="off" spellcheck="false">
+  <fieldset>
+    <legend>公司与委托</legend>
+    <div class="grid">
+      <div class="fld"><label>发行公司全称</label><input id="fCompany" type="text"></div>
+      <div class="fld"><label>委托（主承销商）全称</label><input id="fClient" type="text"></div>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>嘉宾与公证</legend>
+    <div class="grid">
+      <div class="fld"><label>嘉宾1 职务</label><input id="fG1Title" type="text"></div>
+      <div class="fld"><label>嘉宾1 姓名（环节1摇号嘉宾）</label><input id="fG1Name" type="text"></div>
+      <div class="fld"><label>嘉宾1 称谓</label><select id="fG1Honor"><option>先生</option><option>女士</option></select></div>
+      <div class="fld"><label>嘉宾2 职务（可空）</label><input id="fG2Title" type="text"></div>
+      <div class="fld"><label>嘉宾2 姓名（留空＝仅一位嘉宾）</label><input id="fG2Name" type="text"></div>
+      <div class="fld"><label>嘉宾2 称谓</label><select id="fG2Honor"><option>先生</option><option>女士</option></select></div>
+      <div class="fld"><label>公证处名称</label><input id="fOffice" type="text"></div>
+      <div class="fld"><label>公证员 1</label><input id="fNotary1" type="text"></div>
+      <div class="fld"><label>公证员 2</label><input id="fNotary2" type="text"></div>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>发行数据与中签率</legend>
+    <div class="grid">
+      <div class="fld"><label>网上定价发行量（股）</label><input id="fIssue" type="text" inputmode="numeric"></div>
+      <div class="fld"><label>每 N 股确定一个申购号</label><input id="fShares" type="text" inputmode="numeric"></div>
+      <div class="fld"><label>申购配号总数</label><input id="fTotal" type="text" inputmode="numeric"></div>
+      <div class="fld"><label>号码中签数（留空自动＝发行量÷每号股数）</label><input id="fWinCount" type="text" inputmode="numeric" placeholder="留空自动计算"></div>
+      <div class="fld"><label>配号区间上限（留空自动）</label><input id="fRange" type="text" placeholder="留空自动生成"></div>
+      <div class="fld"><label>中签率（%，最小到万亿分之一）</label><input id="fRate" type="text" inputmode="decimal"></div>
+    </div>
+  </fieldset>
+  <div class="btn-row">
     <button class="btn" id="genBtn" type="button">生成主持稿</button>
-  </div>
-  <div class="examples">
-    快捷示例：
-    <button class="chip" type="button" data-v="0.178925">0.178925%</button>
-    <button class="chip" type="button" data-v="0.999999">0.999999%</button>
-    <button class="chip" type="button" data-v="0.0181348368">0.0181348368%</button>
+    <button class="btn ghost" id="resetBtn" type="button">恢复电科思仪示例</button>
   </div>
   <div class="error" id="errorBox" role="alert"></div>
-  <div class="hint">支持 0.0000000001% – 0.9999999999%（最小支持万亿分之一，即小数点后 10 位）；点击按钮或按回车生成。</div>
+  <div class="hint">深圳证券信息有限公司为固定承办单位；摇号结果一律留白（下划线）供现场填写；<span style="color:#FF0000">红色＝自动计算填入</span>，<span style="color:#228B22">绿色＝现场提示语（保留模板原样）</span>。</div>
 </section>
 
 <section id="outputArea" style="display:none">
   <div class="card overview">
-    <h2>拆解总览表</h2>
+    <h2>中签率拆解总览表</h2>
     <div class="table-wrap"><table id="overviewTable"></table></div>
+    <div class="note" id="overviewNote"></div>
   </div>
   <div class="card script-doc" id="scriptDoc"></div>
   <div class="actions no-print">
     <button class="btn ghost" id="copyBtn" type="button">一键复制全文</button>
+    <button class="btn ghost" id="wordBtn" type="button">导出 Word（.doc）</button>
     <button class="btn ghost" id="printBtn" type="button">打印 / 导出 PDF</button>
   </div>
 </section>
@@ -196,12 +219,67 @@ function numToChinese(n){
   return result;
 }
 
+/* 间隔读法（模板用语）："二"后接 百/千/万/亿 时读"两"，如 12500→一万两千五百 */
+function numToLiang(n){
+  return numToChinese(n).replace(/(?<!十)二(?=[百千万亿])/g, '两');
+}
+
+/* 发行数据"朗读式"：按 亿/万 分节（节间两个空格），节内逐位"阿拉伯数字+千/百/拾"，
+   个位裸数字；0→零（连续合并、尾部丢弃）；2 后接 百/千/万/亿 时写"两"。
+   例：24496500→两千4百4拾9万  6千5百；270159586→两亿  7千零1拾5万  9千5百8拾6 */
+function numToReadout(n){
+  var s = String(n);
+  if(!/^\d+$/.test(s)) return '';
+  s = s.replace(/^0+/, '') || '0';
+  if(s === '0') return '零';
+  var secUnits = ['', '万', '亿', '万亿'];
+  var posUnits = ['', '拾', '百', '千'];
+  var sections = [];
+  var x = s;
+  while(x.length > 0){ sections.unshift(x.slice(-4)); x = x.slice(0, -4); }
+  var parts = [];
+  sections.forEach(function(sec, si){
+    var secNum = Number(sec);
+    if(secNum === 0) return;
+    var t = '';
+    var pendingZero = false;
+    var sd = String(secNum);               /* 去掉节内前导零（跨节零由下方补） */
+    for(var j = 0; j < sd.length; j++){
+      var ch = sd[j];
+      var pos = sd.length - 1 - j;
+      if(ch === '0'){ pendingZero = true; continue; }
+      if(pendingZero){ t += '零'; pendingZero = false; }
+      if(pos === 0){ t += ch; }
+      else{ t += (ch === '2' ? '两' : ch) + posUnits[pos]; }
+    }
+    var unit = secUnits[sections.length - 1 - si];
+    if(t === '2' && (unit === '万' || unit === '亿' || unit === '万亿')) t = '两';
+    if(parts.length > 0 && secNum < 1000) t = '零' + t;
+    parts.push(t + unit);
+  });
+  return parts.join('  ');
+}
+
+/* 中签率逐位读法：0.0181348368 → 零点零壹 八壹三四 八三六八（前2位+每4位分节） */
+function rateReadout(normStr){
+  var dec = normStr.split('.')[1] || '';
+  var map = ['零','壹','二','三','四','五','六','七','八','九'];
+  var out = [];
+  for(var i = 0; i < dec.length; i++) out.push(map[dec.charCodeAt(i) - 48]);
+  var groups = [];
+  var rest = out.join('');
+  groups.push(rest.slice(0, 2));
+  rest = rest.slice(2);
+  while(rest.length > 0){ groups.push(rest.slice(0, 4)); rest = rest.slice(4); }
+  return '零点' + groups.join(' ');
+}
+
 /* 解析中签率百分比输入（字符串方式解析，避免浮点误差） */
 function parsePercent(raw){
   var s = String(raw == null ? '' : raw).trim();
   if(!s) return {ok:false, error:'请输入中签率数值'};
   if(/^-/.test(s)) return {ok:false, error:'中签率必须为正数，不能为负值'};
-  if(!/^\d+(\.\d+)?$/.test(s)) return {ok:false, error:'输入包含非法字符，请输入纯数字，例如 0.178925'};
+  if(!/^\d+(\.\d+)?$/.test(s)) return {ok:false, error:'中签率包含非法字符，请输入纯数字，例如 0.0181348368'};
   var parts = s.split('.');
   var intPart = parts[0];
   var decRaw = parts[1] || '';
@@ -231,7 +309,7 @@ function buildPlan(digits){
     var step = {
       N:N,
       digit:d,
-      frac:DENOM_NAMES[N] + '分之' + CN_DIGITS[d],
+      denom:DENOM_NAMES[N],
       percentStr:'0.' + '0'.repeat(i) + d   /* 该位贡献的中签率（%） */
     };
     var divisible = base % d === 0;         /* 拆分判断：10^N ÷ 分子 是否除得尽 */
@@ -260,62 +338,421 @@ function scaledSum(steps){
   }, 0);
 }
 
-/* ============ 文案模板 ============ */
-
-function partSentence(N, m, interval){
-  if(m === 1) return '摇出一个' + N + '位数的中签号码。';
-  return '摇出一个' + N + '位数作为基本中签号码，然后递增或递减' + interval +
-         '（' + numToChinese(interval) + '），得到另外' + (m - 1) + '个中签号码。';
+/* 摇号机分工：每轮至多 3 台机；连接词 首先由/下面由/再由… */
+function drawPasses(N){
+  var out = [];
+  for(var s = 1; s <= N; s += 3){
+    var digits = [];
+    for(var d = s; d <= Math.min(s + 2, N); d++) digits.push(d);
+    var machines = [];
+    for(var m = 1; m <= digits.length; m++) machines.push(m);
+    out.push({
+      conn: s === 1 ? '首先由' : (s === 4 ? '下面由' : '再由'),
+      machines:machines,
+      digits:digits
+    });
+  }
+  return out;
 }
 
-function buildSegments(steps){
-  return steps.map(function(st, idx){
-    var paras = [];
-    if(st.type === 'A'){                                        /* 模板A：分子为1 */
-      paras.push('下面我们摇出' + st.frac + '的中签号码，摇出一个' + st.N + '位数的中签号码。');
-    }else if(st.type === 'B'){                                  /* 模板B：不拆分且分子>1 */
-      paras.push('下面我们摇出' + st.frac + '的中签号码，' + partSentence(st.N, st.digit, st.interval));
-    }else{                                                      /* 模板C：拆分 */
-      var pa = st.parts[0], pb = st.parts[1];
-      var fA = DENOM_NAMES[st.N] + '分之' + CN_DIGITS[pa.m];
-      var fB = DENOM_NAMES[st.N] + '分之' + CN_DIGITS[pb.m];
-      paras.push('下面我们摇出' + st.frac + '的中签号码。将' + st.frac + '拆分成' + fA + '和' + fB + '。');
-      paras.push('首先我们摇出' + fA + '的中签号码，' + partSentence(st.N, pa.m, pa.interval));
-      paras.push('......');
-      paras.push('下面我们摇出' + fB + '的中签号码，' + partSentence(st.N, pb.m, pb.interval));
+/* ============ 输入整理与派生（纯函数，可测试） ============ */
+
+function prepareData(raw){
+  function fail(msg){ return {ok:false, error:msg}; }
+  var v = {};
+  v.company = (raw.company || '').trim();
+  v.client = (raw.client || '').trim();
+  v.office = (raw.office || '').trim();
+  v.notary1 = (raw.notary1 || '').trim();
+  v.notary2 = (raw.notary2 || '').trim();
+  if(!v.company) return fail('请填写发行公司全称');
+  if(!v.client) return fail('请填写委托（主承销商）全称');
+  if(!v.office) return fail('请填写公证处名称');
+  if(!v.notary1 || !v.notary2) return fail('请填写两位公证人员姓名');
+
+  var g1 = {title:(raw.g1title || '').trim(), name:(raw.g1name || '').trim(), honor:raw.g1honor || '先生'};
+  var g2 = {title:(raw.g2title || '').trim(), name:(raw.g2name || '').trim(), honor:raw.g2honor || '先生'};
+  if(!g1.name) return fail('请填写嘉宾1姓名');
+  v.guests = g2.name ? [g1, g2] : [g1];
+
+  if(!/^\d+$/.test((raw.issue || '').trim()) || Number(raw.issue) <= 0) return fail('网上定价发行量须为正整数');
+  if(!/^\d+$/.test((raw.shares || '').trim()) || Number(raw.shares) <= 0) return fail('每号股数须为正整数');
+  v.issue = (raw.issue || '').trim().replace(/^0+/, '') || '0';
+  v.shares = (raw.shares || '').trim().replace(/^0+/, '') || '0';
+
+  var totalStr = (raw.total || '').trim();
+  if(!/^\d+$/.test(totalStr)) return fail('申购配号总数须为正整数');
+  totalStr = totalStr.replace(/^0+/, '');
+  if(!totalStr) return fail('申购配号总数须为正整数');
+  v.total = totalStr;
+  v.D = totalStr.length;
+  if(v.D < 4 || v.D > 12) return fail('申购配号总数须为 4～12 位整数（当前 ' + v.D + ' 位）');
+  v.firstDigit = totalStr.charAt(0);
+  v.lastDigits = totalStr.slice(1);
+
+  var wc = (raw.winCount || '').trim();
+  if(wc){
+    if(!/^\d+$/.test(wc) || Number(wc) <= 0) return fail('号码中签数须为正整数（或留空自动计算）');
+    v.winCount = wc.replace(/^0+/, '');
+    v.winAuto = false;
+  }else{
+    v.winCount = String(Math.round(Number(v.issue) / Number(v.shares)));
+    v.winAuto = true;
+  }
+  if(Number(v.winCount) <= 0) return fail('号码中签数计算结果须大于 0，请检查发行量与每号股数');
+
+  v.rangeLower = '0000，0000，0001';
+  var rg = (raw.range || '').trim();
+  if(rg){
+    v.rangeUpper = rg;
+  }else{
+    var p12 = ('000000000000' + v.total).slice(-12);
+    v.rangeUpper = p12.slice(0, 4) + ',' + p12.slice(4, 8) + ',' + p12.slice(8, 12);
+  }
+
+  var pr = parsePercent(raw.rate);
+  if(!pr.ok) return fail(pr.error);
+  v.rateParsed = pr;
+  v.rateNorm = pr.normStr;
+  v.maxN = Math.min(v.D - 1, 12);           /* 环节只生成到 配号位数-1 */
+  v.stepsAll = buildPlan(pr.digits);
+  v.shown = v.stepsAll.filter(function(st){ return st.N <= v.maxN; });
+  v.hidden = v.stepsAll.filter(function(st){ return st.N > v.maxN; });
+  return {ok:true, v:v};
+}
+
+/* 为各环节分配编号（拆分占两个号：——A/——B），返回 {labels: {step:'4——A/5——B'}, total: 最大编号} */
+function numberSteps(shown){
+  var labels = [];
+  var k = 1;
+  shown.forEach(function(st){
+    if(st.type === 'C'){ labels.push(k + '——A / ' + (k + 1) + '——B'); k += 2; }
+    else{ labels.push(String(k)); k += 1; }
+  });
+  return {labels:labels, total:k - 1};
+}
+
+/* ============ 文档构建（段落 = run 数组；run={t:文本, c:'r'红|'g'绿|无}） ============ */
+
+function B(t){ return {t:t}; }
+function R(t){ return {t:t, c:'r'}; }
+function G(t){ return {t:t, c:'g'}; }
+
+/* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块） */
+function passParas(N, guest){
+  var out = [];
+  var passes = drawPasses(N);
+  passes.forEach(function(ps, i){
+    var intro = ps.conn + ' ' + ps.machines.join('、') + '号机 ' +
+      (ps.machines.length > 1 ? '分别摇出' : '摇出') +
+      ' 此组号码的 倒数第' + ps.digits.join('、') + '位， ';
+    if(i === 0){
+      out.push([B(intro)]);
+      if(guest){
+        out.push([B('【有请' + guest.client + ' ' + guest.title + ' ' + guest.name + ' ' + guest.honor +
+                    ' 来到1号 摇号机旁 进行摇号。'), G('（等待嘉宾就位）'), B(' 】')]);
+      }
+      out.push([B('请开始摇号'), G('（留意摇号情况）')]);
+    }else{
+      out.push([B(intro + '请开始摇号'), G('（留意摇号情况）')]);
     }
-    paras.push('凡申购号码末' + st.N + '位数与以上产生的号码相同即中签。');
-    return {title:(idx + 1) + '. ' + st.frac, paras:paras};
+    out.push([B('号码已经产生，' + ps.digits.map(function(d){
+      return '倒数第' + d + '位号码是___';
+    }).join('，') + '。')]);
   });
+  if(guest) out.push([B('【感谢' + guest.name + ' ' + guest.honor + ' ，请回位就坐】')]);
+  return out;
 }
 
-function buildPlainText(normStr, segments){
-  var lines = ['新股摇号抽签仪式主持稿', '（中签率：' + normStr + '%）', ''];
-  segments.forEach(function(seg, i){
-    if(i > 0){ lines.push('———————————————————————', ''); }
-    lines.push(seg.title);
-    seg.paras.forEach(function(p){ lines.push(p); });
-    lines.push('');
-  });
-  return lines.join('\n');
+/* 结果行（留白）：m=1 为单号型，m>1 为基本号+递增型 */
+function resultPara(N, m, liang){
+  if(m === 1){
+    return [R(N + ' 位数 的中签号码已经产生，是____________'), B(' '), G('（根据显示屏读出）')];
+  }
+  return [R(N + ' 位数 的基本中签号码已经产生，是____________'), B(' '), G('（根据显示屏读出）'), B(' '),
+    R('根据电脑程序计算显示，递增或递减  ' + liang + ' ，得到另外  ' + (m - 1) +
+      ' 个中签号码是____________________________________________')];
 }
 
-/* ============ 页面渲染与交互 ============ */
+function fanPara(N){
+  return [R('凡申购号码 末  ' + N + ' 位数 与以上产生的号码相同 即中签。')];
+}
+
+/* 环节话术句 */
+function openerParas(st, part){
+  var dn = st.denom, N = st.N;
+  if(part === 'A' || (part === undefined && st.type === 'A')){          /* 分子为1 */
+    return [[B('下面我们摇出 '), R(dn + ' 分之  1'), B(' 的中签号码，'),
+             R('摇出一个  ' + N + ' 位数 的中签号码。')]];
+  }
+  if(part === undefined && st.type === 'B'){                            /* 不拆分 */
+    return [[B('下面我们摇出 '), R(dn + ' 分之  ' + st.digit), B(' 的中签号码，'),
+             R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
+               numToLiang(st.interval) + ' ，得到另外  ' + (st.digit - 1) + ' 个中签号码。')]];
+  }
+  if(part === 'splitA'){                                                /* 拆分 A 段 */
+    var a = st.parts[0], b = st.parts[1];
+    return [
+      [B('下面我们摇出 '), R(dn + ' 分之  ' + st.digit), B(' 的中签号码，将 '),
+       R(dn + ' 分之  ' + st.digit), B(' 拆分成 '), R(dn + ' 分之  ' + a.m),
+       B(' 和 '), R(dn + ' 分之  ' + b.m), B(' 。')],
+      [B('首先我们摇出 '), R(dn + ' 分之  ' + a.m), B(' 的中签号码，'),
+       R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
+         numToLiang(a.interval) + ' ，得到另外  ' + (a.m - 1) + ' 个中签号码。')]
+    ];
+  }
+  /* 拆分 B 段（独立环节） */
+  var pb = st.parts[1];
+  var tail = pb.m === 1
+    ? '摇出一个  ' + N + ' 位数 的中签号码。'
+    : '摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
+      numToLiang(pb.interval) + ' ，得到另外  ' + (pb.m - 1) + ' 个中签号码。';
+  return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
+}
+
+/* 生成完整主持稿（段落数组，空数组 = 空行） */
+function buildDocument(v){
+  var doc = [];
+  function P(){ for(var i = 0; i < arguments.length; i++) doc.push(arguments[i]); }
+  function BLANK(){ doc.push([]); }
+
+  /* ---- 开场 ---- */
+  P([B('上午好，各位嘉宾，我们活动即将开始，请将手机调至静音，谢谢。')]);
+  P([B('各位嘉宾：上午好！欢迎光临 深圳证券信息有限公司  摇号抽签仪式现场。')]);
+  P([B(v.company + ' '), R('新股发行'), B('  摇号抽签仪式 现在开始！')]);
+  P([B('本次摇号抽签是由')]);
+  P([B(v.client + ' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
+     G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
+  P([B('来自主承销商方面的嘉宾有：')]);
+  v.guests.forEach(function(g){
+    P([B(v.client + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
+  });
+  P([B('同时还有来自' + v.office + '：' + v.notary1 + ' 公证员 和 ' + v.notary2 + ' 公证人员。')]);
+  P([B('欢迎各位嘉宾的到来，并预祝' + v.company + ' '), R('新股发行'), B(' 获得圆满成功。')]);
+  P([B('在摇号开始前，我们先请 主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R('新股发行'),
+     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  主承销商代表  签署《公平承诺书》，有请' +
+       v.notary1 + ' 公证员 和 ' + v.notary2 + ' 公证人员 签署《公平承诺书》')]);
+  BLANK();
+
+  /* ---- 发行数据 ---- */
+  var rateStr = v.rateNorm + ' %  （百分之  ' + rateReadout(v.rateNorm) + '）';
+  P([B('本次' + v.company + ' ')]);
+  P([R('向投资者 网上定价发行量为  ' + v.issue + ' （ ' + numToReadout(v.issue) + '）  股，')]);
+  P([R('本次网上发行的申购配号总数为  ' + v.total + ' （ ' + numToReadout(v.total) + '）')]);
+  P([B('配号区间为' + v.rangeLower + '――（至） '), R(v.rangeUpper), B(' 。')]);
+  P([B('根据' + v.company + ' '), R('新股发行'), B(' 公告，')]);
+  P([B('按每 '), R(v.shares + '股'), B(' 有效申购量  确定一个申购号，')]);
+  P([B('将有 '), R(v.winCount + ' （ ' + numToReadout(v.winCount) + '）'), B(' 个号码中签，')]);
+  P([B('中签率为 '), R(rateStr)]);
+  BLANK();
+
+  /* ---- 挑选摇号球 ---- */
+  P([B('下面有请'), R('主承销商代表'), B(' 随机挑选三组不同的 摇号球。')]);
+  P([B('选出的三组号码球分别是第_____组，第_____组，第_____组，')]);
+  P([B('请工作人员依次将第_____组号码球倒入1号盒中，')]);
+  P([B('              将第_____组号码球倒入2号盒中，')]);
+  P([B('              将第_____组号码球倒入3号盒中，')]);
+  P([B('有请公证员检查摇号球'), G('（留意检查情况）')]);
+  P([B('请工作人员  将三组摇号球  分别放入摇号机中。'), G('（等待工作人员放置摇号球）')]);
+  P([B('请公证员 进场检查 摇号器具。'), G('（公证员讲话）')]);
+  P([B('谢谢公证员！')]);
+  BLANK();
+
+  /* ---- 摇号规则 ---- */
+  P([B('下面宣读摇号规则：')]);
+  P([B('1、（壹）摇号本着公开、公平、公正的原则，采用“随机和均衡相结合”的办法进行，即 根据中签率，首先随机摇出  某一位数的基本中签号码，然后递增或递减  一个相等数，得出其他中签号码。')]);
+  P([B('2、（贰）每一个号码只能有一次中签机会，如果后轮摇出号码  与先前产生的中签号码相同，则后轮摇号无效，须重新摇号。')]);
+  P([B('3、（叁）需要摇号 产生的每一组号码，均按照摇号机的编号顺序，先摇个位数，再摇十位数，再摇百位数，以此类推。')]);
+  P([B('4、（肆）如果在摇号过程中  摇号器具  发生故障，则发生故障器具  摇出的当前号码无效，排除故障后，按摇号规则  继续摇出  新的中签号码。')]);
+  BLANK();
+
+  /* ---- 摇号开始 ---- */
+  P([B('现在摇号开始，根据中签率 '), R(rateStr)]);
+  BLANK();
+
+  /* ---- 摇号环节 ---- */
+  var numbering = numberSteps(v.shown);
+  var K = 0;
+  v.shown.forEach(function(st, idx){
+    var isFirst = idx === 0;
+    var guest = isFirst ? {client:v.client, title:v.guests[0].title, name:v.guests[0].name, honor:v.guests[0].honor} : null;
+    if(st.type === 'C'){
+      var a = st.parts[0], b = st.parts[1];
+      P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——A')]);
+      openerParas(st, 'splitA').forEach(function(p){ P(p); });
+      passParas(st.N, guest).forEach(function(p){ P(p); });
+      P(resultPara(st.N, a.m, a.interval ? numToLiang(a.interval) : ''));
+      BLANK();
+      P([G(K + 2 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——B')]);
+      openerParas(st, 'splitB').forEach(function(p){ P(p); });
+      passParas(st.N, null).forEach(function(p){ P(p); });
+      P(resultPara(st.N, b.m, b.interval ? numToLiang(b.interval) : ''));
+      BLANK();
+      if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
+      K += 2;
+    }else{
+      P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit)]);
+      openerParas(st).forEach(function(p){ P(p); });
+      passParas(st.N, guest).forEach(function(p){ P(p); });
+      P(resultPara(st.N, st.digit, st.interval ? numToLiang(st.interval) : ''));
+      BLANK();
+      if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
+      K += 1;
+    }
+  });
+
+  /* ---- 倒数第二步 ---- */
+  var maxN = v.maxN;
+  var dnMax = DENOM_NAMES[maxN];
+  P([G(K + 1 + ' 、倒数第二步')]);
+  P([G('留意剩余号码个数，如剩余号码个数小于或等于配号总数首位数字“ ' + v.firstDigit + ' ”，则进入： ' +
+       (K + 2) + ' 、最后一步，（如剩余号码个数等于0，电脑屏幕会提示“摇号结束”，则直接结束语）。')]);
+  P([G('如剩余号码个数大于配号总数首位数字“ ' + v.firstDigit + ' ”，则重复如下流程：')]);
+  P([B('下面我们摇出 '), R(dnMax + ' 分之  1'), B(' 的中签号码，'),
+     R('摇出一个  ' + maxN + ' 位数 的中签号码。')]);
+  passParas(maxN, null).forEach(function(p){ P(p); });
+  P(resultPara(maxN, 1, ''));
+  BLANK();
+  P(fanPara(maxN));
+  BLANK();
+
+  /* ---- 最后一步 ---- */
+  var D = v.D;
+  var balls = [];
+  for(var bi = 0; bi <= Number(v.firstDigit); bi++) balls.push(String(bi));
+  P([G(K + 2 + ' 、最后一步')]);
+  P([R('经计算，现在还有 ____ 个 ' + D + ' 位数的中签号码未产生。')]);
+  P([G('（重复下面的步骤，直到 剩余号码个数 为0）')]);
+  P([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
+  P([R('下面我们摇出  第_____个（最后一个）  ' + D + ' 位数的中签号码。')]);
+  passParas(D - 1, null).forEach(function(p){ P(p); });
+  P([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是____________'), B(' '), G('（根据显示屏读出）')]);
+  BLANK();
+  P([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
+  P([G('（A、只剩下一个可选号码：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 _____ '), B(' '), G('）')]);
+  P([G('（B、有多个可选号码：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
+  P([B('                                                               '), R(balls.join(' 、 ') + ' 、 ')]);
+  P([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
+  P([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是_______________  '), G('）')]);
+  BLANK();
+  P([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
+  P([R('第_____个（最后一个）  ' + D + ' 位数的中签号码已经产生，是______________________')]);
+  P([G('（留意剩余号码个数，如果不为0，则重复上面的步骤，直到 最后一个  ' + D + ' 位数的中签号码产生）')]);
+  BLANK();
+  P(fanPara(D));
+  BLANK();
+
+  /* ---- 结束语 ---- */
+  P([G(K + 3 + ' 、结束语')]);
+  P([B('本次摇号的  中签号码  已全部产生。')]);
+  P([B('下面有请公证员就本次摇号结果致公证词。'), G('（公证员上台致词）')]);
+  P([B('谢谢公证员！')]);
+  P([B('各位嘉宾，' + v.company + ' '), R('新股发行'), B(' 摇号抽签仪式 到此圆满结束，谢谢！')]);
+  BLANK();
+  BLANK();
+  P([B('下面有请嘉宾上台拍照留念！')]);
+
+  return doc;
+}
+
+/* ============ 渲染：纯文本 / 网页预览 / Word HTML ============ */
+
+function docToText(doc){
+  return doc.map(function(p){
+    return p.map(function(r){ return r.t; }).join('');
+  }).join('\n');
+}
+
+function escHtml(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function docToPreviewHtml(doc){
+  return doc.map(function(p){
+    if(p.length === 0) return '<p class="blank">&nbsp;</p>';
+    var inner = p.map(function(r){
+      var t = escHtml(r.t);
+      if(r.c === 'r') return '<span class="v">' + t + '</span>';
+      if(r.c === 'g') return '<span class="g">' + t + '</span>';
+      return t;
+    }).join('');
+    return '<p>' + inner + '</p>';
+  }).join('');
+}
+
+function docToWordHtml(doc){
+  function runHtml(r){
+    var t = escHtml(r.t).replace(/ /g, '&nbsp;');
+    if(r.c === 'r') return '<span style="color:#FF0000">' + t + '</span>';
+    if(r.c === 'g') return '<span style="color:#228B22">' + t + '</span>';
+    return t;
+  }
+  var body = doc.map(function(p){
+    if(p.length === 0) return '<p>&nbsp;</p>';
+    return '<p>' + p.map(runHtml).join('') + '</p>';
+  }).join('\n');
+  return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>' +
+    '@page{size:A4;margin:2.5cm}p{font-family:宋体,SimSun,serif;font-size:14pt;line-height:1.75;margin:0 0 4pt}' +
+    '</style></head><body>' + body + '</body></html>';
+}
+
+/* ============ 页面交互 ============ */
 
 if(typeof document !== 'undefined'){
 
-  var input = document.getElementById('rateInput');
+  var DEFAULTS = {
+    fCompany:'中电科思仪科技 股份有限公司',
+    fClient:'国泰海通证券 股份有限公司',
+    fG1Title:'高级经理', fG1Name:'钱佳位', fG1Honor:'先生',
+    fG2Title:'', fG2Name:'', fG2Honor:'先生',
+    fOffice:'广东省深圳市罗湖公证处',
+    fNotary1:'伍斌', fNotary2:'杨勇',
+    fIssue:'24496500', fShares:'500', fTotal:'270159586',
+    fWinCount:'', fRange:'', fRate:'0.0181348368'
+  };
+  var FIELD_IDS = Object.keys(DEFAULTS);
+
   var errorBox = document.getElementById('errorBox');
   var outputArea = document.getElementById('outputArea');
   var overviewTable = document.getElementById('overviewTable');
+  var overviewNote = document.getElementById('overviewNote');
   var scriptDoc = document.getElementById('scriptDoc');
   var genBtn = document.getElementById('genBtn');
+  var resetBtn = document.getElementById('resetBtn');
   var copyBtn = document.getElementById('copyBtn');
+  var wordBtn = document.getElementById('wordBtn');
   var printBtn = document.getElementById('printBtn');
-  var currentPlainText = '';
+  var currentText = '';
+  var currentWordHtml = '';
+  var currentFileName = '摇号抽签仪式主持稿.doc';
 
-  function esc(s){
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function fillForm(data){
+    FIELD_IDS.forEach(function(id){
+      document.getElementById(id).value = data[id];
+    });
+  }
+
+  function collectRaw(){
+    return {
+      company:document.getElementById('fCompany').value,
+      client:document.getElementById('fClient').value,
+      g1title:document.getElementById('fG1Title').value,
+      g1name:document.getElementById('fG1Name').value,
+      g1honor:document.getElementById('fG1Honor').value,
+      g2title:document.getElementById('fG2Title').value,
+      g2name:document.getElementById('fG2Name').value,
+      g2honor:document.getElementById('fG2Honor').value,
+      office:document.getElementById('fOffice').value,
+      notary1:document.getElementById('fNotary1').value,
+      notary2:document.getElementById('fNotary2').value,
+      issue:document.getElementById('fIssue').value,
+      shares:document.getElementById('fShares').value,
+      total:document.getElementById('fTotal').value,
+      winCount:document.getElementById('fWinCount').value,
+      range:document.getElementById('fRange').value,
+      rate:document.getElementById('fRate').value
+    };
   }
 
   function intervalCell(st){
@@ -330,68 +767,64 @@ if(typeof document !== 'undefined'){
     return '否';
   }
 
-  function renderOverview(steps, normStr, sumOk){
+  function renderOverview(v){
+    var numbering = numberSteps(v.shown);
     var html = '<thead><tr><th>环节</th><th>中签率</th><th>位数</th><th>号码个数</th><th>是否拆分</th><th>间隔</th></tr></thead><tbody>';
-    steps.forEach(function(st, i){
-      html += '<tr><td>' + (i + 1) + '</td><td>' + st.frac + '（' + st.percentStr + '%）</td><td>' + st.N +
+    v.shown.forEach(function(st, i){
+      html += '<tr><td>' + numbering.labels[i] + '</td><td>' + st.denom + '分之' + st.digit + '（' + st.percentStr + '%）</td><td>' + st.N +
               '</td><td>' + st.digit + '</td><td>' + splitCell(st) + '</td><td>' + intervalCell(st) + '</td></tr>';
     });
+    v.hidden.forEach(function(st){
+      html += '<tr class="hidden-step"><td>—</td><td>' + st.denom + '分之' + st.digit + '（' + st.percentStr + '%）</td><td>' + st.N +
+              '</td><td>' + st.digit + '</td><td>—</td><td>→ 最后一步处理</td></tr>';
+    });
+    var sumOk = scaledSum(v.stepsAll) === v.rateParsed.scaled;
     var check = sumOk ? '<span class="ok">校验通过 ✓</span>' : '<span style="color:#dc2626">校验不符 ✗</span>';
-    html += '<tr class="total"><td>合计</td><td>' + esc(normStr) + '%</td><td colspan="4">' + check + '</td></tr>';
+    html += '<tr class="total"><td>合计</td><td>' + escHtml(v.rateNorm) + '%</td><td colspan="4">' + check + '</td></tr>';
     html += '</tbody>';
     overviewTable.innerHTML = html;
-  }
-
-  function renderDoc(normStr, segments){
-    var html = '<div class="doc-head"><h2>新股摇号抽签仪式主持稿</h2>' +
-               '<div class="rate-line">中签率：' + esc(normStr) + '%</div></div>';
-    segments.forEach(function(seg, i){
-      if(i > 0) html += '<hr class="divider">';
-      html += '<div class="segment"><h3>' + esc(seg.title) + '</h3>';
-      seg.paras.forEach(function(p){
-        html += p === '......' ? '<p class="dots">......</p>' : '<p>' + esc(p) + '</p>';
-      });
-      html += '</div>';
-    });
-    scriptDoc.innerHTML = html;
+    overviewNote.textContent = '申购配号总数 ' + v.total + ' 共 ' + v.D + ' 位：摇号环节生成至 ' +
+      DENOM_NAMES[v.maxN] + '分位（N≤' + v.maxN + '），更深数位由「倒数第二步 / 最后一步」承接；' +
+      '号码中签数 ' + v.winCount + (v.winAuto ? '（自动＝发行量÷每号股数）' : '（手工填写）') + '。';
   }
 
   function generate(){
-    var res = parsePercent(input.value);
+    var res = prepareData(collectRaw());
     if(!res.ok){
       errorBox.textContent = res.error;
       outputArea.style.display = 'none';
       return;
     }
     errorBox.textContent = '';
-    var steps = buildPlan(res.digits);
-    var segments = buildSegments(steps);
-    currentPlainText = buildPlainText(res.normStr, segments);
-    renderOverview(steps, res.normStr, scaledSum(steps) === res.scaled);
-    renderDoc(res.normStr, segments);
+    var v = res.v;
+    var doc = buildDocument(v);
+    currentText = docToText(doc);
+    currentWordHtml = docToWordHtml(doc);
+    currentFileName = '摇号抽签仪式主持稿-' +
+      v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.doc';
+    renderOverview(v);
+    scriptDoc.innerHTML = docToPreviewHtml(doc);
     outputArea.style.display = '';
   }
 
   genBtn.addEventListener('click', generate);
-  input.addEventListener('keydown', function(e){
-    if(e.key === 'Enter') generate();
+  resetBtn.addEventListener('click', function(){
+    fillForm(DEFAULTS);
+    generate();
   });
-  Array.prototype.forEach.call(document.querySelectorAll('.chip'), function(chip){
-    chip.addEventListener('click', function(){
-      input.value = chip.getAttribute('data-v');
-      generate();
-    });
+  document.querySelector('.input-card').addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && e.target.tagName === 'INPUT') generate();
   });
 
   copyBtn.addEventListener('click', function(){
-    if(!currentPlainText) return;
+    if(!currentText) return;
     function done(){
       copyBtn.textContent = '已复制 ✓';
       setTimeout(function(){ copyBtn.textContent = '一键复制全文'; }, 1500);
     }
     function fallback(){
       var ta = document.createElement('textarea');
-      ta.value = currentPlainText;
+      ta.value = currentText;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
@@ -400,15 +833,28 @@ if(typeof document !== 'undefined'){
       document.body.removeChild(ta);
     }
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(currentPlainText).then(done, fallback);
+      navigator.clipboard.writeText(currentText).then(done, fallback);
     }else{
       fallback();
     }
   });
 
+  wordBtn.addEventListener('click', function(){
+    if(!currentWordHtml) return;
+    var blob = new Blob(['﻿', currentWordHtml], {type:'application/msword'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = currentFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  });
+
   printBtn.addEventListener('click', function(){ window.print(); });
 
-  /* 页面加载后自动以默认示例生成一次 */
+  /* 页面加载：填入示例并自动生成 */
+  fillForm(DEFAULTS);
   generate();
 }
 </script>
