@@ -77,14 +77,14 @@ tr.total td{background:#f8fbff;font-weight:600}
 tr.hidden-step td{color:var(--muted);background:#fafbfd}
 .ok{color:var(--green)}
 
-/* 主持稿正文：逐字复刻模板（红=计算值，绿=提示语），保留原文空格 */
+/* 主持稿正文：逐字复刻模板（红=计算值，绿=提示语），保留原文空格；字体与 UI 统一 */
 .script-doc{
   padding:34px 38px;
-  font-family:"Songti SC","STSong","SimSun",serif;
 }
 .script-doc p{
   font-size:1.06rem;line-height:1.9;
   white-space:pre-wrap;
+  overflow-wrap:anywhere;      /* 长下划线/空格串在窄屏可折行，防横向溢出 */
   margin:0;
 }
 .script-doc p.blank{line-height:1.2}
@@ -95,11 +95,22 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
 footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 
 @media (max-width:600px){
-  header.site h1{font-size:1.3rem}
-  .script-doc{padding:22px 16px}
-  .script-doc p{font-size:.98rem}
+  .container{padding:16px 10px 48px}
+  header.site{padding:16px 0 12px}
+  header.site h1{font-size:1.22rem}
+  header.site p{font-size:.82rem}
+  .input-card{padding:14px}
+  fieldset{padding:10px 12px 12px;margin-bottom:12px}
+  .grid{grid-template-columns:1fr;gap:8px}
+  .btn-row .btn{flex:1}
+  .overview{padding:14px 12px;margin-bottom:14px}
+  .overview h2{font-size:.95rem}
+  table{font-size:.8rem}
+  th,td{padding:6px 8px}
+  .script-doc{padding:18px 14px}
+  .script-doc p{font-size:.92rem;line-height:1.8}
   .actions{justify-content:stretch}
-  .actions .btn{flex:1}
+  .actions .btn{flex:1 1 100%}
 }
 
 @media print{
@@ -693,7 +704,7 @@ function docToWordHtml(doc){
   }).join('\n');
   return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" ' +
     'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>' +
-    '@page{size:A4;margin:2.5cm}p{font-family:宋体,SimSun,serif;font-size:14pt;line-height:1.75;margin:0 0 4pt}' +
+    '@page{size:A4;margin:2.5cm}p{font-family:"Microsoft YaHei","微软雅黑",sans-serif;font-size:14pt;line-height:1.75;margin:0 0 4pt}' +
     '</style></head><body>' + body + '</body></html>';
 }
 
