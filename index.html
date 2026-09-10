@@ -90,6 +90,7 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
 .script-doc p.blank{line-height:1.2}
 .script-doc .v{color:#FF0000}
 .script-doc .g{color:#228B22}
+.script-doc .m{color:#94a3b8}
 
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
@@ -175,7 +176,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 </section>
 
 <section id="outputArea" style="display:none">
-  <div class="card overview">
+  <div class="card overview" id="overviewCard">
     <h2>中签率拆解总览表</h2>
     <div class="table-wrap"><table id="overviewTable"></table></div>
     <div class="note" id="overviewNote"></div>
@@ -666,6 +667,74 @@ function buildDocument(v){
   return doc;
 }
 
+/* 空表状态下的主持稿示意骨架：固定话术照常显示，表单决定的部分一律留白 */
+function buildSkeletonDoc(){
+  var RB = '________';
+  var doc = [];
+  function P(){ for(var i = 0; i < arguments.length; i++) doc.push(arguments[i]); }
+  function BLANK(){ doc.push([]); }
+
+  P([B('上午好，各位嘉宾，我们活动即将开始，请将手机调至静音，谢谢。')]);
+  P([B('各位嘉宾：上午好！欢迎光临 深圳证券信息有限公司  摇号抽签仪式现场。')]);
+  P([R(RB + ' '), R('新股发行'), B('  摇号抽签仪式 现在开始！')]);
+  P([B('本次摇号抽签是由')]);
+  P([R(RB), B(' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
+     G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
+  P([B('来自主承销商方面的嘉宾有：')]);
+  P([R(RB + ' ' + RB + ' ' + RB + ' ' + RB + ' ')]);
+  P([B('同时还有来自'), R(RB), B('：'), R(RB), B(' 公证员 和 '), R(RB), B(' 公证人员。')]);
+  P([B('欢迎各位嘉宾的到来，并预祝'), R(RB + ' '), R('新股发行'), B(' 获得圆满成功。')]);
+  P([B('在摇号开始前，我们先请 主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R('新股发行'),
+     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  主承销商代表  签署《公平承诺书》，有请'),
+     R(RB), B(' 公证员 和 '), R(RB), B(' 公证人员 签署《公平承诺书》')]);
+  BLANK();
+
+  P([B('本次'), R(RB), B(' ')]);
+  P([R('向投资者 网上定价发行量为  ' + RB + ' （ ' + RB + '）  股，')]);
+  P([R('本次网上发行的申购配号总数为  ' + RB + ' （ ' + RB + ' ）')]);
+  P([B('配号区间为0000，0000，0001――（至） '), R(RB), B(' 。')]);
+  P([B('根据'), R(RB), B(' '), R('新股发行'), B(' 公告，')]);
+  P([B('按每 '), R('____股'), B(' 有效申购量  确定一个申购号，')]);
+  P([B('将有 '), R(RB + ' （ ' + RB + ' ）'), B(' 个号码中签，')]);
+  P([B('中签率为 '), R(RB + ' %  （百分之  ' + RB + '）')]);
+  BLANK();
+
+  P([B('下面有请'), R('主承销商代表'), B(' 随机挑选三组不同的 摇号球。')]);
+  P([B('选出的三组号码球分别是第_____组，第_____组，第_____组，')]);
+  P([B('请工作人员依次将第_____组号码球倒入1号盒中，')]);
+  P([B('              将第_____组号码球倒入2号盒中，')]);
+  P([B('              将第_____组号码球倒入3号盒中，')]);
+  P([B('有请公证员检查摇号球'), G('（留意检查情况）')]);
+  P([B('请工作人员  将三组摇号球  分别放入摇号机中。'), G('（等待工作人员放置摇号球）')]);
+  P([B('请公证员 进场检查 摇号器具。'), G('（公证员讲话）')]);
+  P([B('谢谢公证员！')]);
+  BLANK();
+
+  P([B('下面宣读摇号规则：')]);
+  P([B('1、（壹）摇号本着公开、公平、公正的原则，采用“随机和均衡相结合”的办法进行，即 根据中签率，首先随机摇出  某一位数的基本中签号码，然后递增或递减  一个相等数，得出其他中签号码。')]);
+  P([B('2、（贰）每一个号码只能有一次中签机会，如果后轮摇出号码  与先前产生的中签号码相同，则后轮摇号无效，须重新摇号。')]);
+  P([B('3、（叁）需要摇号 产生的每一组号码，均按照摇号机的编号顺序，先摇个位数，再摇十位数，再摇百位数，以此类推。')]);
+  P([B('4、（肆）如果在摇号过程中  摇号器具  发生故障，则发生故障器具  摇出的当前号码无效，排除故障后，按摇号规则  继续摇出  新的中签号码。')]);
+  BLANK();
+
+  P([B('现在摇号开始，根据中签率 '), R(RB + ' %  （百分之  ' + RB + '）')]);
+  BLANK();
+
+  P([{t:'……（填写上方表单并点击「生成主持稿」后，此处自动生成摇号环节、倒数第二步与最后一步）……', c:'m'}]);
+  BLANK();
+
+  P([G('_____ 、结束语')]);
+  P([B('本次摇号的  中签号码  已全部产生。')]);
+  P([B('下面有请公证员就本次摇号结果致公证词。'), G('（公证员上台致词）')]);
+  P([B('谢谢公证员！')]);
+  P([B('各位嘉宾，'), R(RB + ' '), R('新股发行'), B(' 摇号抽签仪式 到此圆满结束，谢谢！')]);
+  BLANK();
+  BLANK();
+  P([B('下面有请嘉宾上台拍照留念！')]);
+
+  return doc;
+}
+
 /* ============ 渲染：纯文本 / 网页预览 / Word HTML ============ */
 
 function docToText(doc){
@@ -685,6 +754,7 @@ function docToPreviewHtml(doc){
       var t = escHtml(r.t);
       if(r.c === 'r') return '<span class="v">' + t + '</span>';
       if(r.c === 'g') return '<span class="g">' + t + '</span>';
+      if(r.c === 'm') return '<span class="m">' + t + '</span>';
       return t;
     }).join('');
     return '<p>' + inner + '</p>';
@@ -696,6 +766,7 @@ function docToWordHtml(doc){
     var t = escHtml(r.t).replace(/ /g, '&nbsp;');
     if(r.c === 'r') return '<span style="color:#FF0000">' + t + '</span>';
     if(r.c === 'g') return '<span style="color:#228B22">' + t + '</span>';
+    if(r.c === 'm') return '<span style="color:#94A3B8">' + t + '</span>';
     return t;
   }
   var body = doc.map(function(p){
@@ -726,6 +797,7 @@ if(typeof document !== 'undefined'){
 
   var errorBox = document.getElementById('errorBox');
   var outputArea = document.getElementById('outputArea');
+  var overviewCard = document.getElementById('overviewCard');
   var overviewTable = document.getElementById('overviewTable');
   var overviewNote = document.getElementById('overviewNote');
   var scriptDoc = document.getElementById('scriptDoc');
@@ -814,6 +886,18 @@ if(typeof document !== 'undefined'){
     currentFileName = '摇号抽签仪式主持稿-' +
       v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.doc';
     renderOverview(v);
+    overviewCard.style.display = '';
+    scriptDoc.innerHTML = docToPreviewHtml(doc);
+    outputArea.style.display = '';
+  }
+
+  /* 空表状态：显示主持稿示意骨架（表单决定的部分留白），总览表隐藏 */
+  function renderSkeleton(){
+    var doc = buildSkeletonDoc();
+    currentText = docToText(doc);
+    currentWordHtml = docToWordHtml(doc);
+    currentFileName = '摇号抽签仪式主持稿.doc';
+    overviewCard.style.display = 'none';
     scriptDoc.innerHTML = docToPreviewHtml(doc);
     outputArea.style.display = '';
   }
@@ -863,6 +947,8 @@ if(typeof document !== 'undefined'){
   });
 
   printBtn.addEventListener('click', function(){ window.print(); });
+
+  renderSkeleton();
 }
 </script>
 </body>
