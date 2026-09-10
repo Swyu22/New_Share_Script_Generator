@@ -95,6 +95,15 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 
+/* 微信内导出引导遮罩（微信内置浏览器不支持网页下载与打印，引导到系统浏览器） */
+.wx-mask{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;padding:72px 20px 20px;display:flex;justify-content:center}
+.wx-tip{align-self:flex-start;max-width:430px;width:100%;padding:20px 22px 16px;font-size:.95rem}
+.wx-tip h3{font-size:1.05rem;color:var(--blue-dark);margin-bottom:8px}
+.wx-tip ol{padding-left:1.4em;margin:4px 0 10px}
+.wx-tip p{color:var(--muted);font-size:.88rem}
+.wx-tip .btn{width:100%;margin-top:10px}
+.wx-hint{margin-top:10px}
+
 @media (max-width:600px){
   .container{padding:16px 10px 48px}
   header.site{padding:16px 0 12px}
@@ -184,10 +193,20 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <div class="card script-doc" id="scriptDoc"></div>
   <div class="actions no-print">
     <button class="btn ghost" id="copyBtn" type="button">一键复制全文</button>
-    <button class="btn ghost" id="wordBtn" type="button">导出 Word（.doc）</button>
+    <button class="btn ghost" id="wordBtn" type="button">导出 Word（.docx）</button>
     <button class="btn ghost" id="printBtn" type="button">打印 / 导出 PDF</button>
   </div>
+  <div class="hint wx-hint no-print" id="wxHint" style="display:none"></div>
 </section>
+
+<div class="wx-mask no-print" id="wxMask" style="display:none">
+  <div class="card wx-tip">
+    <h3>微信内无法直接导出文件</h3>
+    <div id="wxSteps"></div>
+    <p>也可以先点「一键复制全文」，把主持稿粘贴到备忘录或 WPS 等文档 App 中使用。</p>
+    <button class="btn" id="wxClose" type="button">我知道了</button>
+  </div>
+</div>
 
 <footer class="no-print">新股摇号抽签仪式主持稿生成器 · 单文件网页应用</footer>
 </div>
@@ -735,7 +754,7 @@ function buildSkeletonDoc(){
   return doc;
 }
 
-/* ============ 渲染：纯文本 / 网页预览 / Word HTML ============ */
+/* ============ 渲染：纯文本 / 网页预览 / Word（.docx） ============ */
 
 function docToText(doc){
   return doc.map(function(p){
@@ -761,22 +780,129 @@ function docToPreviewHtml(doc){
   }).join('');
 }
 
-function docToWordHtml(doc){
-  function runHtml(r){
-    var t = escHtml(r.t).replace(/ /g, '&nbsp;');
-    if(r.c === 'r') return '<span style="color:#FF0000">' + t + '</span>';
-    if(r.c === 'g') return '<span style="color:#228B22">' + t + '</span>';
-    if(r.c === 'm') return '<span style="color:#94A3B8">' + t + '</span>';
-    return t;
+/* ---- Word .docx 导出：生成真实 OOXML 文件（ZIP+XML），微信/WPS/Office 均可直接预览 ----
+   （旧方案是 HTML 伪装 .doc，微信预览校验真实内容格式会报"文件已损坏或未知格式"） */
+
+/* CRC32 查表法（ZIP 数据校验必需） */
+var CRC32_TABLE = (function(){
+  var t = new Uint32Array(256);
+  for(var n = 0; n < 256; n++){
+    var c = n;
+    for(var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
   }
-  var body = doc.map(function(p){
-    if(p.length === 0) return '<p>&nbsp;</p>';
-    return '<p>' + p.map(runHtml).join('') + '</p>';
-  }).join('\n');
-  return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" ' +
-    'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>' +
-    '@page{size:A4;margin:2.5cm}p{font-family:"Microsoft YaHei","微软雅黑",sans-serif;font-size:14pt;line-height:1.75;margin:0 0 4pt}' +
-    '</style></head><body>' + body + '</body></html>';
+  return t;
+})();
+
+function crc32(bytes){
+  var c = 0xFFFFFFFF;
+  for(var i = 0; i < bytes.length; i++) c = CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/* 极简 ZIP 写入器：stored 方式（不压缩），所有 Office/WPS/微信预览均支持 */
+function zipStore(entries){
+  function u16(v){ return [v & 255, (v >>> 8) & 255]; }
+  function u32(v){ return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
+  var enc = new TextEncoder();
+  var chunks = [], central = [], offset = 0;
+  entries.forEach(function(e){
+    var name = enc.encode(e.name);
+    var crc = crc32(e.data);
+    var head = u32(0x04034b50).concat(u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(e.data.length), u32(e.data.length), u16(name.length), u16(0));
+    chunks.push(new Uint8Array(head), name, e.data);
+    central.push({name:name, crc:crc, size:e.data.length, offset:offset});
+    offset += head.length + name.length + e.data.length;
+  });
+  var cdStart = offset;
+  central.forEach(function(c){
+    var rec = u32(0x02014b50).concat(u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(c.crc), u32(c.size), u32(c.size), u16(c.name.length),
+      u16(0), u16(0), u16(0), u16(0), u32(0), u32(c.offset));
+    chunks.push(new Uint8Array(rec), c.name);
+    offset += rec.length + c.name.length;
+  });
+  var end = u32(0x06054b50).concat(u16(0), u16(0), u16(entries.length), u16(entries.length),
+    u32(offset - cdStart), u32(cdStart), u16(0));
+  chunks.push(new Uint8Array(end));
+  return new Blob(chunks, {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+
+/* 由文档模型生成真实 .docx：A4、2.5cm 页边距、14pt 微软雅黑、1.75 倍行距，红绿灰三色与网页一致 */
+function docToDocxBlob(doc){
+  function runXml(r){
+    var t = escHtml(r.t);
+    if(!t) return '';
+    var color = r.c === 'r' ? 'FF0000' : r.c === 'g' ? '228B22' : r.c === 'm' ? '94A3B8' : '';
+    return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+      (color ? '<w:color w:val="' + color + '"/>' : '') +
+      '<w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>' +
+      '<w:t xml:space="preserve">' + t + '</w:t></w:r>';
+  }
+  var paras = doc.map(function(p){
+    return '<w:p><w:pPr><w:spacing w:after="80" w:line="420" w:lineRule="auto"/></w:pPr>' +
+      p.map(runXml).join('') + '</w:p>';
+  }).join('');
+  var documentXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+    paras +
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+    '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="851" w:footer="992" w:gutter="0"/>' +
+    '</w:sectPr></w:body></w:document>';
+  var contentTypes =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+    '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+    '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
+    '</Types>';
+  var rels =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>' +
+    '</Relationships>';
+  var docRels =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+    '</Relationships>';
+  var stylesXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:docDefaults><w:rPrDefault><w:rPr>' +
+    '<w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+    '<w:sz w:val="28"/><w:szCs w:val="28"/>' +
+    '</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
+    '</w:styles>';
+  var coreXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ' +
+    'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" ' +
+    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+    '<dc:title>摇号抽签仪式主持稿</dc:title><dc:creator>新股摇号抽签仪式主持稿生成器</dc:creator>' +
+    '</cp:coreProperties>';
+  var appXml =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">' +
+    '<Application>Microsoft Word</Application></Properties>';
+  var enc = new TextEncoder();
+  return zipStore([
+    {name:'[Content_Types].xml', data:enc.encode(contentTypes)},
+    {name:'_rels/.rels', data:enc.encode(rels)},
+    {name:'docProps/core.xml', data:enc.encode(coreXml)},
+    {name:'docProps/app.xml', data:enc.encode(appXml)},
+    {name:'word/document.xml', data:enc.encode(documentXml)},
+    {name:'word/_rels/document.xml.rels', data:enc.encode(docRels)},
+    {name:'word/styles.xml', data:enc.encode(stylesXml)}
+  ]);
 }
 
 /* ============ 页面交互 ============ */
@@ -807,8 +933,30 @@ if(typeof document !== 'undefined'){
   var wordBtn = document.getElementById('wordBtn');
   var printBtn = document.getElementById('printBtn');
   var currentText = '';
-  var currentWordHtml = '';
-  var currentFileName = '摇号抽签仪式主持稿.doc';
+  var currentDocxBlob = null;
+  var currentFileName = '摇号抽签仪式主持稿.docx';
+
+  /* 微信内置浏览器（iOS/Android）不支持网页内下载与打印：导出/打印改为引导「在浏览器打开」 */
+  var ua = navigator.userAgent || '';
+  var isWechat = /MicroMessenger/i.test(ua);
+  var isIOS = /iPhone|iPad|iPod/i.test(ua);
+  var wxMask = document.getElementById('wxMask');
+  var wxHint = document.getElementById('wxHint');
+  function wxGuard(){
+    if(!isWechat) return false;
+    document.getElementById('wxSteps').innerHTML = isIOS
+      ? '<ol><li>点屏幕右上角的「···」</li><li>选择「在 Safari 打开」</li><li>在 Safari 里再点「导出 Word」或「打印 / 导出 PDF」</li></ol>'
+      : '<ol><li>点屏幕右上角的「···」</li><li>选择「在浏览器打开」</li><li>在浏览器里再点「导出 Word」或「打印 / 导出 PDF」</li></ol>';
+    wxMask.style.display = '';
+    return true;
+  }
+  if(isWechat){
+    wxHint.textContent = '当前在微信内打开：微信不支持网页内导出文件，点「导出 Word / 打印 PDF」会显示打开引导；也可以直接用「一键复制全文」。';
+    wxHint.style.display = '';
+  }
+  wxMask.addEventListener('click', function(e){
+    if(e.target === wxMask || e.target.id === 'wxClose') wxMask.style.display = 'none';
+  });
 
   function fillForm(data){
     FIELD_IDS.forEach(function(id){
@@ -882,9 +1030,9 @@ if(typeof document !== 'undefined'){
     var v = res.v;
     var doc = buildDocument(v);
     currentText = docToText(doc);
-    currentWordHtml = docToWordHtml(doc);
+    currentDocxBlob = docToDocxBlob(doc);
     currentFileName = '摇号抽签仪式主持稿-' +
-      v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.doc';
+      v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.docx';
     renderOverview(v);
     overviewCard.style.display = '';
     scriptDoc.innerHTML = docToPreviewHtml(doc);
@@ -895,8 +1043,8 @@ if(typeof document !== 'undefined'){
   function renderSkeleton(){
     var doc = buildSkeletonDoc();
     currentText = docToText(doc);
-    currentWordHtml = docToWordHtml(doc);
-    currentFileName = '摇号抽签仪式主持稿.doc';
+    currentDocxBlob = docToDocxBlob(doc);
+    currentFileName = '摇号抽签仪式主持稿.docx';
     overviewCard.style.display = 'none';
     scriptDoc.innerHTML = docToPreviewHtml(doc);
     outputArea.style.display = '';
@@ -935,10 +1083,10 @@ if(typeof document !== 'undefined'){
   });
 
   wordBtn.addEventListener('click', function(){
-    if(!currentWordHtml) return;
-    var blob = new Blob(['﻿', currentWordHtml], {type:'application/msword'});
+    if(wxGuard()) return;
+    if(!currentDocxBlob) return;
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(currentDocxBlob);
     a.download = currentFileName;
     document.body.appendChild(a);
     a.click();
@@ -946,7 +1094,7 @@ if(typeof document !== 'undefined'){
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
   });
 
-  printBtn.addEventListener('click', function(){ window.print(); });
+  printBtn.addEventListener('click', function(){ if(wxGuard()) return; window.print(); });
 
   renderSkeleton();
 }
