@@ -69,6 +69,9 @@ legend{font-weight:600;color:var(--blue-dark);padding:0 6px;font-size:.95rem}
 #pdfStatus.err{color:var(--red)}
 .fld input[type=file]{padding:7px 10px;font-size:.85rem}
 .btn:disabled{opacity:.6;cursor:default}
+.url-row{display:flex;gap:8px}
+.url-row input{flex:1;min-width:0}
+.paste-btn{flex:none;width:41px;padding:0;display:flex;align-items:center;justify-content:center}
 
 /* 嘉宾动态行 */
 .guest-row{display:grid;grid-template-columns:1.5fr 1fr .7fr 36px;gap:8px;margin:8px 0}
@@ -100,13 +103,13 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
   padding:34px 38px;
 }
 .script-doc p{
-  font-size:1.06rem;line-height:1.9;
+  font-size:1.06rem;line-height:2;   /* 行距（上下）统一为 2 倍，空行段落同值 */
+  letter-spacing:.06em;              /* 字距（左右）统一为项目现有值 */
   white-space:pre-wrap;
   overflow-wrap:anywhere;      /* 长下划线/空格串在窄屏可折行，防横向溢出 */
   margin:0;
 }
-.script-doc p.blank{line-height:1.2}
-.script-doc .v{color:#FF0000}
+.script-doc .v{color:#FF0000;font-weight:700}   /* 填入/计算值：红色加粗 */
 .script-doc .g{color:#228B22}
 .script-doc .m{color:#94a3b8}
 
@@ -136,7 +139,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   table{font-size:.8rem}
   th,td{padding:6px 8px}
   .script-doc{padding:18px 14px}
-  .script-doc p{font-size:.92rem;line-height:1.8}
+  .script-doc p{font-size:.92rem;line-height:2}
   .actions{justify-content:stretch}
   .actions .btn{flex:1 1 100%}
 }
@@ -149,7 +152,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   .script-doc{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .overview h2{font-size:12pt}
   table{font-size:10pt}
-  .script-doc p{font-size:12pt;line-height:1.85}
+  .script-doc p{font-size:12pt;line-height:2;letter-spacing:.06em}
 }
 </style>
 </head>
@@ -176,7 +179,9 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>从公告 PDF 自动填充（可选）</legend>
     <div class="grid">
-      <div class="fld"><label>公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…"></div>
+      <div class="fld"><label>公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label>
+        <div class="url-row"><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…"><button class="btn ghost paste-btn" id="pasteBtn" type="button" title="粘贴剪贴板内容" aria-label="粘贴"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></button></div>
+      </div>
       <div class="fld"><label>或选择本地 PDF 文件（优先于网址）</label><input id="fPdfFile" type="file" accept="application/pdf,.pdf"></div>
     </div>
     <div class="btn-row">
@@ -303,49 +308,10 @@ function numToChinese(n){
   return result;
 }
 
-/* 间隔读法（模板用语，强达稿实证）："二"后接 千/万/亿 时读"两"（12500→一万两千五百）；
-   整节恰为"二百"（后接 万/亿 或收尾）也读"两"（2000000→两百万）；
-   但"二百"后还有数字时保持"二"（2500000→二百五十万）；"十"前永远保持（二十万、十二亿五千万） */
-function numToLiang(n){
-  return numToChinese(n)
-    .replace(/(?<!十)二(?=[千万亿])/g, '两')
-    .replace(/(?<!十)二百(?=[万亿]|$)/g, '两百');
-}
-
-/* 发行数据"朗读式"：按 亿/万 分节（节间两个空格），节内逐位"阿拉伯数字+千/百/拾"，
-   个位裸数字；0→零（连续合并、尾部丢弃）；2 后接 百/千/万/亿 时写"两"。
-   例：24496500→两千4百4拾9万  6千5百；270159586→两亿  7千零1拾5万  9千5百8拾6 */
-function numToReadout(n){
-  var s = String(n);
-  if(!/^\d+$/.test(s)) return '';
-  s = s.replace(/^0+/, '') || '0';
-  if(s === '0') return '零';
-  var secUnits = ['', '万', '亿', '万亿'];
-  var posUnits = ['', '拾', '百', '千'];
-  var sections = [];
-  var x = s;
-  while(x.length > 0){ sections.unshift(x.slice(-4)); x = x.slice(0, -4); }
-  var parts = [];
-  sections.forEach(function(sec, si){
-    var secNum = Number(sec);
-    if(secNum === 0) return;
-    var t = '';
-    var pendingZero = false;
-    var sd = String(secNum);               /* 去掉节内前导零（跨节零由下方补） */
-    for(var j = 0; j < sd.length; j++){
-      var ch = sd[j];
-      var pos = sd.length - 1 - j;
-      if(ch === '0'){ pendingZero = true; continue; }
-      if(pendingZero){ t += '零'; pendingZero = false; }
-      if(pos === 0){ t += ch; }
-      else{ t += (ch === '2' ? '两' : ch) + posUnits[pos]; }
-    }
-    var unit = secUnits[sections.length - 1 - si];
-    if(t === '2' && (unit === '万' || unit === '亿' || unit === '万亿')) t = '两';
-    if(parts.length > 0 && secNum < 1000) t = '零' + t;
-    parts.push(t + unit);
-  });
-  return parts.join('  ');
+/* 汉字读法（统一）：numToChinese 的全汉字结果按 亿/万 分节、节间一个空格；"二"一律读"二"不读"两"。
+   例：9872478779→九十八亿 七千二百四十七万 八千七百七十九；24496500→二千四百四十九万 六千五百 */
+function numToHanzi(n){
+  return numToChinese(n).replace(/(万亿|万|亿)/g, '$1 ').replace(/ +$/, '');
 }
 
 /* 中签率逐位读法：0.0181348368 → 零点零壹 八壹三四 八三六八（前2位+每4位分节） */
@@ -675,7 +641,11 @@ function numberSteps(shown){
 
 function B(t){ return {t:t}; }
 function R(t){ return {t:t, c:'r'}; }
-function G(t){ return {t:t, c:'g'}; }
+function G(t){
+  /* 绿色文字统一加括号（括号同绿）；已带括号的跳过 */
+  if(!/^[(（]/.test(t) && !/[)）]$/.test(t)) t = '（' + t + '）';
+  return {t:t, c:'g'};
+}
 function M(t){ return {t:t, c:'m'}; }   /* 灰色：生成器辅助指引（可按需删改） */
 
 /* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块） */
@@ -728,7 +698,7 @@ function openerParas(st, part){
   if(part === undefined && st.type === 'B'){                            /* 不拆分 */
     return [[B('下面我们摇出 '), R(dn + ' 分之  ' + st.digit), B(' 的中签号码，'),
              R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-               numToLiang(st.interval) + ' ，得到另外  ' + (st.digit - 1) + ' 个中签号码。')]];
+               numToChinese(st.interval) + ' ，得到另外  ' + (st.digit - 1) + ' 个中签号码。')]];
   }
   if(part === 'splitA'){                                                /* 拆分 A 段 */
     var a = st.parts[0], b = st.parts[1];
@@ -738,7 +708,7 @@ function openerParas(st, part){
        B(' 和 '), R(dn + ' 分之  ' + b.m), B(' 。')],
       [B('首先我们摇出 '), R(dn + ' 分之  ' + a.m), B(' 的中签号码，'),
        R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-         numToLiang(a.interval) + ' ，得到另外  ' + (a.m - 1) + ' 个中签号码。')]
+         numToChinese(a.interval) + ' ，得到另外  ' + (a.m - 1) + ' 个中签号码。')]
     ];
   }
   /* 拆分 B 段（独立环节） */
@@ -746,7 +716,7 @@ function openerParas(st, part){
   var tail = pb.m === 1
     ? '摇出一个  ' + N + ' 位数 的中签号码。'
     : '摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-      numToLiang(pb.interval) + ' ，得到另外  ' + (pb.m - 1) + ' 个中签号码。';
+      numToChinese(pb.interval) + ' ，得到另外  ' + (pb.m - 1) + ' 个中签号码。';
   return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
 }
 
@@ -783,12 +753,12 @@ function buildDocument(v){
   /* ---- 发行数据 ---- */
   var rateStr = v.rateNorm + ' %  （百分之  ' + rateReadout(v.rateNorm) + '）';
   P([B('本次' + v.company + ' ')]);
-  P([R('向投资者 网上定价发行量为  ' + v.issue + ' （ ' + numToReadout(v.issue) + '）  ' + v.unit + '，')]);
-  P([R('本次网上发行的申购配号总数为  ' + v.total + ' （ ' + numToReadout(v.total) + '）')]);
+  P([R('向投资者 网上定价发行量为  ' + v.issue + ' （ ' + numToHanzi(v.issue) + '）  ' + v.unit + '，')]);
+  P([R('本次网上发行的申购配号总数为  ' + v.total + ' （ ' + numToHanzi(v.total) + '）')]);
   P([B('配号区间为' + v.rangeLower + '――（至） '), R(v.rangeUpper), B(' 。')]);
   P([B('根据' + v.company + ' '), R(v.kindAnnoun), B(' 公告，')]);
   P([B('按每 '), R(v.shares + v.unit), B(' 有效申购量  确定一个申购号，')]);
-  P([B('将有 '), R(v.winCount + ' （ ' + numToReadout(v.winCount) + '）'), B(' 个号码中签，')]);
+  P([B('将有 '), R(v.winCount + ' （ ' + numToHanzi(v.winCount) + '）'), B(' 个号码中签，')]);
   P([B('中签率为 '), R(rateStr)]);
   BLANK();
 
@@ -831,12 +801,12 @@ function buildDocument(v){
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——A')]);
       openerParas(st, 'splitA').forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, a.m, a.interval ? numToLiang(a.interval) : ''));
+      P(resultPara(st.N, a.m, a.interval ? numToChinese(a.interval) : ''));
       BLANK();
       P([G(K + 2 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——B')]);
       openerParas(st, 'splitB').forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 2)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, b.m, b.interval ? numToLiang(b.interval) : ''));
+      P(resultPara(st.N, b.m, b.interval ? numToChinese(b.interval) : ''));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 2;
@@ -844,7 +814,7 @@ function buildDocument(v){
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit)]);
       openerParas(st).forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, st.digit, st.interval ? numToLiang(st.interval) : ''));
+      P(resultPara(st.N, st.digit, st.interval ? numToChinese(st.interval) : ''));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 1;
@@ -1066,11 +1036,13 @@ function docToDocxBlob(doc){
     var color = r.c === 'r' ? 'FF0000' : r.c === 'g' ? '228B22' : r.c === 'm' ? '94A3B8' : '';
     return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
       (color ? '<w:color w:val="' + color + '"/>' : '') +
+      (r.c === 'r' ? '<w:b/><w:bCs/>' : '') +      /* 填入/计算值：加粗 */
+      '<w:spacing w:val="17"/>' +                  /* 字距 0.06em（14pt×0.06≈0.84pt＝17/20pt） */
       '<w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>' +
       '<w:t xml:space="preserve">' + t + '</w:t></w:r>';
   }
   var paras = doc.map(function(p){
-    return '<w:p><w:pPr><w:spacing w:after="80" w:line="420" w:lineRule="auto"/></w:pPr>' +
+    return '<w:p><w:pPr><w:spacing w:after="80" w:line="480" w:lineRule="auto"/></w:pPr>' +
       p.map(runXml).join('') + '</w:p>';
   }).join('');
   var documentXml =
@@ -1177,6 +1149,7 @@ if(typeof document !== 'undefined'){
   var pdfStatus = document.getElementById('pdfStatus');
   var fPdfUrl = document.getElementById('fPdfUrl');
   var fPdfFile = document.getElementById('fPdfFile');
+  var pasteBtn = document.getElementById('pasteBtn');
   var fType = document.getElementById('fType');
   var resetBtn2 = document.getElementById('resetBtn2');
   var clientGuestRows = document.getElementById('clientGuestRows');
@@ -1332,6 +1305,17 @@ if(typeof document !== 'undefined'){
   fType.addEventListener('change', function(){
     syncTypeLabels();
     if(generatedOnce) generate(); else renderSkeleton();
+  });
+  pasteBtn.addEventListener('click', function(){
+    function ok(text){
+      text = (text || '').trim();
+      if(text){ fPdfUrl.value = text; setPdfStatus('已粘贴剪贴板内容', 'ok'); }
+      else setPdfStatus('剪贴板为空', 'err');
+    }
+    function fail(){ setPdfStatus('读取剪贴板失败：请长按输入框手动粘贴', 'err'); }
+    if(navigator.clipboard && navigator.clipboard.readText){
+      navigator.clipboard.readText().then(ok, fail);
+    }else fail();
   });
   document.querySelector('.input-card').addEventListener('keydown', function(e){
     if(e.key === 'Enter' && e.target.tagName === 'INPUT') generate();
