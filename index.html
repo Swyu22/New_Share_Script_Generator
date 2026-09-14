@@ -225,9 +225,9 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>公证</legend>
     <div class="grid">
-      <div class="fld"><label>公证处名称</label><input id="fOffice" type="text"></div>
-      <div class="fld"><label>公证员 1</label><input id="fNotary1" type="text"></div>
-      <div class="fld"><label>公证员 2</label><input id="fNotary2" type="text"></div>
+      <div class="fld"><label>公证处名称（留空则留白）</label><input id="fOffice" type="text" value="广东省深圳市罗湖公证处"></div>
+      <div class="fld"><label>公证员 1（可空，留空则留白）</label><input id="fNotary1" type="text"></div>
+      <div class="fld"><label>公证员 2（可空，留空则留白）</label><input id="fNotary2" type="text"></div>
     </div>
   </fieldset>
   <fieldset>
@@ -558,8 +558,10 @@ function prepareData(raw){
   v.notary2 = (raw.notary2 || '').trim();
   if(!v.company) return fail('请填写发行公司全称');
   if(!v.client) return fail('请填写委托（主承销商）全称');
-  if(!v.office) return fail('请填写公证处名称');
-  if(!v.notary1 || !v.notary2) return fail('请填写两位公证人员姓名');
+  /* 公证处/公证员可留空：主持稿对应位置留白（下划线）供现场填写 */
+  v.office = v.office || '________';
+  v.notary1 = v.notary1 || '________';
+  v.notary2 = v.notary2 || '________';
 
   v.type = raw.type === 'kzz' ? 'kzz' : 'ipo';
   v.unit = v.type === 'kzz' ? '张' : '股';
@@ -579,7 +581,7 @@ function prepareData(raw){
   }
   var cg = parseGuests(raw.clientGuests || [], '主承销商');
   if(typeof cg === 'string') return fail(cg);
-  if(cg.length === 0) return fail('请至少填写一位主承销商嘉宾（摇号环节1的摇号嘉宾）');
+  /* 主承销商嘉宾可为 0 人：介绍段不出现，摇号环节不安排嘉宾 */
   var ig = parseGuests(raw.issuerGuests || [], '发行人');
   if(typeof ig === 'string') return fail(ig);
   v.clientGuestCo = (raw.clientGuestCo || '').trim() || v.client;
@@ -743,10 +745,12 @@ function buildDocument(v){
   P([B('本次摇号抽签是由')]);
   P([B(v.client + ' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
      G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
-  P([B('来自主承销商方面的嘉宾有：')]);
-  v.clientGuests.forEach(function(g){
-    P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
-  });
+  if(v.clientGuests.length){
+    P([B('来自主承销商方面的嘉宾有：')]);
+    v.clientGuests.forEach(function(g){
+      P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
+    });
+  }
   if(v.issuerGuests.length){
     P([B('来自发行人方面的嘉宾有：')]);
     v.issuerGuests.forEach(function(g){
@@ -1483,6 +1487,7 @@ if(typeof document !== 'undefined'){
       syncTypeLabels();
       document.getElementById('fCompany').value = r.fields.company;
       document.getElementById('fClient').value = r.fields.client;
+      document.getElementById('fClientGuestCo').value = r.fields.client;   /* 联动：嘉宾（主承销商）公司名称 */
       document.getElementById('fIssue').value = r.fields.issue;
       document.getElementById('fShares').value = r.fields.shares;
       document.getElementById('fTotal').value = r.fields.total;
