@@ -178,7 +178,6 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
     <div class="grid">
       <div class="fld"><label>公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…"></div>
       <div class="fld"><label>或选择本地 PDF 文件（优先于网址）</label><input id="fPdfFile" type="file" accept="application/pdf,.pdf"></div>
-      <div class="fld"><label>自建代理地址（可选，填入后优先使用）</label><input id="fPdfProxy" type="url" placeholder="如 https://xxx.workers.dev"></div>
     </div>
     <div class="btn-row">
       <button class="btn ghost" id="pdfBtn" type="button">解析 PDF 并填充</button>
@@ -1178,7 +1177,6 @@ if(typeof document !== 'undefined'){
   var pdfStatus = document.getElementById('pdfStatus');
   var fPdfUrl = document.getElementById('fPdfUrl');
   var fPdfFile = document.getElementById('fPdfFile');
-  var fPdfProxy = document.getElementById('fPdfProxy');
   var fType = document.getElementById('fType');
   var resetBtn2 = document.getElementById('resetBtn2');
   var clientGuestRows = document.getElementById('clientGuestRows');
@@ -1335,9 +1333,6 @@ if(typeof document !== 'undefined'){
     syncTypeLabels();
     if(generatedOnce) generate(); else renderSkeleton();
   });
-  fPdfProxy.addEventListener('input', function(){
-    try{ localStorage.setItem('pdfProxyUrl', fPdfProxy.value.trim()); }catch(e){}
-  });
   document.querySelector('.input-card').addEventListener('keydown', function(e){
     if(e.key === 'Enter' && e.target.tagName === 'INPUT') generate();
   });
@@ -1434,18 +1429,15 @@ if(typeof document !== 'undefined'){
     });
   }
 
-  /* 依次尝试：自建代理（页面配置或代码默认）→ 直连（目标站允许 CORS 时）→ 公共代理；
+  /* 依次尝试：内置 Worker 代理 → 直连（目标站允许 CORS 时）→ 公共代理；
      巨潮 static.cninfo.com.cn 仅白名单域名可跨域，直连基本不可用 */
-  var DEFAULT_PDF_PROXY = 'https://share-script-pdf-proxy.swyu17.workers.dev';   /* 自建 Worker 代理（页面输入框优先于此） */
+  var PDF_PROXY = 'https://share-script-pdf-proxy.swyu17.workers.dev';   /* 自建 Worker 代理（代码内置，自动应用） */
   var PDF_PROXIES = [
     function(u){ return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
     function(u){ return 'https://api.cors.lol/?url=' + encodeURIComponent(u); }
   ];
   function fetchPdfBytes(url){
-    var attempts = [];
-    var userProxy = (fPdfProxy.value || '').trim() || DEFAULT_PDF_PROXY;
-    if(userProxy) attempts.push(userProxy.replace(/\/+$/, '') + '/?url=' + encodeURIComponent(url));
-    attempts.push(url);
+    var attempts = [PDF_PROXY.replace(/\/+$/, '') + '/?url=' + encodeURIComponent(url), url];
     PDF_PROXIES.forEach(function(f){ attempts.push(f(url)); });
     var i = 0;
     function next(){
@@ -1514,9 +1506,8 @@ if(typeof document !== 'undefined'){
     }).then(function(){ pdfBtn.disabled = false; });
   });
 
-  /* 初始：1 位主承销商嘉宾空行、恢复记忆的代理地址、标签同步 */
+  /* 初始：1 位主承销商嘉宾空行、标签同步 */
   addGuestRow(clientGuestRows);
-  try{ fPdfProxy.value = localStorage.getItem('pdfProxyUrl') || ''; }catch(e){}
   syncTypeLabels();
   renderSkeleton();
 }
