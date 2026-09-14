@@ -568,6 +568,7 @@ function computeLive(v, st){
     var nf = (st.values['last_' + rl + 'final'] || '').trim();
     if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status:''}); continue; }
     if(!/^\d+$/.test(nf) || nf.length > v.D){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'格式有误', bad:true}); continue; }
+    if(nf.length < v.D) nf = ('000000000000' + nf).slice(-v.D);   /* 补前导零至配号位数（完整号码约定为 D 位） */
     var xf = Number(nf);
     if(xf < 1 || xf > total){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'超出配号区间，无效需重摇', bad:true}); continue; }
     var badF = collideAny(xf, v.D, produced);
@@ -1011,7 +1012,6 @@ function buildDocument(v, rounds){
   BLANK();
 
   /* ---- 摇号环节 ---- */
-  var numbering = numberSteps(v.shown);
   var K = 0;
   function guestAt(num){   /* 环节编号 → 第 num 位嘉宾（先主承销商后发行人）；超出则不安排 */
     if(num > v.guests.length) return null;
@@ -1192,6 +1192,8 @@ function docToText(doc, resolve){
 function escHtml(s){
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+/* 属性上下文转义（input value="…"）：防引号突破属性 */
+function escAttr(s){ return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 function docToPreviewHtml(doc, state){
   return doc.map(function(p){
@@ -1210,7 +1212,8 @@ function docToPreviewHtml(doc, state){
         var w = lv.kind === 'digit' ? '' :
           ' style="width:' + (lv.exp ? Math.min((lv.N + 1) * 5, 46) : (lv.N ? lv.N + 2 : lv.blank + 1)) + 'ch"';
         var cls = 'v lv ' + (lv.kind === 'digit' ? 'dig' : lv.kind === 'text' ? 'txt' : 'num') + (lv.exp ? ' exp' : '');
-        return '<input class="' + cls + '" data-live="' + lv.id + '" value="' + escHtml(val) + '"' + w +
+        return '<input class="' + cls + '" data-live="' + lv.id + '" value="' + escAttr(val) + '"' + w +
+          ' aria-label="' + (lv.kind === 'digit' ? '倒数第' + lv.pos + '位' : lv.kind === 'text' ? '现场填写' : '号码') + '"' +
           (lv.kind === 'digit' ? ' maxlength="1" inputmode="numeric"' : '') + ' autocomplete="off" spellcheck="false">';
       }
       var t = escHtml(r.t);
@@ -1608,7 +1611,9 @@ if(typeof document !== 'undefined'){
     if(live.kind === 'comp'){
       if(live.r) return String(live.r);
       if(live.id === 'remainingEcho'){
-        return Object.keys(liveState.values).length ? String(computeLive(liveV, liveState).remaining) : '';
+        if(!Object.keys(liveState.values).length) return '';
+        var cache = liveState.cache || computeLive(liveV, liveState);   /* 优先用 updateLive 的缓存 */
+        return String(cache.remaining);
       }
       return '';
     }
@@ -1789,7 +1794,10 @@ if(typeof document !== 'undefined'){
     }else fail();
   });
   document.querySelector('.input-card').addEventListener('keydown', function(e){
-    if(e.key === 'Enter' && e.target.tagName === 'INPUT') generate();
+    if(e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+    if(e.target === fPdfUrl && fPdfUrl.value.trim()){ pdfBtn.click(); return; }   /* 网址框回车＝解析 PDF */
+    if(e.target === fPdfFile) return;                                             /* 文件框回车不触发生成 */
+    generate();
   });
 
   copyBtn.addEventListener('click', function(){

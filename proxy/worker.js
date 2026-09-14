@@ -16,6 +16,8 @@ const ALLOWED_HOSTS = new Set([
 
 function withCors(resp) {
   const r = new Response(resp.body, resp);
+  /* 上游若声明了内容编码（gzip 等），与透传字节可能不一致，移除防二次解压损坏 */
+  r.headers.delete('content-encoding');
   r.headers.set('Access-Control-Allow-Origin', '*');
   r.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   r.headers.set('Access-Control-Allow-Headers', '*');
@@ -40,12 +42,25 @@ export default {
     if (t.protocol !== 'https:' || !ALLOWED_HOSTS.has(t.hostname)) {
       return withCors(Response.json({ error: 'host not allowed' }, { status: 403 }));
     }
-    const upstream = await fetch(t.toString(), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-      },
-      redirect: 'follow',
-    });
+    let upstream;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        upstream = await fetch(t.toString(), {
+          headers: {
+            /* 巨潮 WAF（2026-09 起）：要求 Referer 为自家域名，且拒绝 Chrome 形态 UA */
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://www.cninfo.com.cn/',
+            'Accept': '*/*',
+          },
+          redirect: 'follow',
+        });
+      } catch {
+        return withCors(Response.json({ error: 'upstream fetch failed' }, { status: 502 }));
+      }
+      /* 偶发按 IP 限流返回 403，稍候重试一次 */
+      if (upstream.status !== 403) break;
+      if (attempt === 0) await new Promise(r => setTimeout(r, 800));
+    }
     return withCors(upstream);
   },
 };
