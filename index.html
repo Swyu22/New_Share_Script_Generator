@@ -90,6 +90,30 @@ fieldset .btn-row{margin-top:12px}   /* fieldset 内网格与按钮行的间距�
 .guest-row input:focus,.guest-row select:focus{border-color:var(--blue)}
 .btn-sm{height:40px;padding:0 14px;font-size:.88rem;margin-top:12px}
 .btn-del{padding:0;font-size:1.15rem;line-height:1;color:var(--red)}
+
+/* 现场实时辅助 */
+.live-card{padding:20px 22px;margin-bottom:22px}
+.live-card h2{font-size:1.05rem;margin-bottom:10px;color:var(--blue-dark)}
+.live-card .muted-sm{color:var(--muted);font-size:.8rem;font-weight:400}
+.live-status{display:flex;gap:8px 18px;flex-wrap:wrap;font-size:.92rem;margin-bottom:12px;padding:10px 14px;background:var(--blue-50);border-radius:8px}
+.live-status b{color:var(--blue-dark)}
+.live-status .st-p2{color:var(--blue-dark);font-weight:600}
+.live-status .st-last{color:#b45309;font-weight:600}
+.live-status .st-end{color:var(--green);font-weight:600}
+.live-status .st-over{color:var(--red);font-weight:600}
+.live-actions{margin-top:12px}
+#liveTable tr.bad td{color:var(--red)}
+#liveTable tr.warn td:last-child{color:#b45309}
+#liveTable td.nums{white-space:normal;min-width:180px}
+.lv{font:inherit;letter-spacing:inherit;border:none;border-bottom:2px solid var(--blue);background:var(--blue-50);border-radius:4px 4px 0 0;color:#FF0000;font-weight:700;text-align:center;padding:0 2px;margin:0 1px}
+.lv:focus{outline:none;background:#fff;border-bottom-color:var(--blue-dark)}
+.lv.dig{width:2.4ch}
+.lv.txt{width:8ch}
+.lv.exp{max-width:100%}
+.lvcomp{border-bottom:2px solid var(--blue);padding:0 2px}
+.lv-bad{border-bottom-color:var(--red)!important;background:#fee2e2!important}
+.lv-addrow{margin:4px 0}
+.lv-addrow .btn-sm{margin-top:0;border-style:dashed}
 @media (max-width:600px){
   .guest-row{grid-template-columns:1fr 1fr}
 }
@@ -123,6 +147,12 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
 
 .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
+
+/* 现场实时辅助输入框：打印时去掉底色与下划线，保留数值 */
+@media print{
+  .lv{border-bottom-color:transparent;background:none}
+  .lv-addrow{display:none}
+}
 
 /* 微信内导出引导遮罩（微信内置浏览器不支持网页下载与打印，引导到系统浏览器） */
 .wx-mask{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:50;padding:72px 20px 20px;display:flex;justify-content:center}
@@ -255,6 +285,12 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
     <h2>中签率拆解总览表</h2>
     <div class="table-wrap"><table id="overviewTable"></table></div>
     <div class="note" id="overviewNote"></div>
+  </div>
+  <div class="card live-card no-print" id="liveCard" style="display:none">
+    <h2>现场摇号记录<span class="muted-sm">（填写稿中摇号数字后实时更新）</span></h2>
+    <div class="live-status" id="liveStatus"></div>
+    <div class="table-wrap"><table id="liveTable"></table></div>
+    <div class="live-actions"><button class="btn ghost btn-sm" id="liveClearBtn" type="button">清空已填写</button></div>
   </div>
   <div class="card script-doc" id="scriptDoc"></div>
   <div class="actions no-print">
@@ -415,6 +451,135 @@ function drawPasses(N){
     });
   }
   return out;
+}
+
+/* ============ 现场实时辅助：纯逻辑（可 Node 测试） ============ */
+
+/* 逐位数字拼装 N 位号码串：digits[pos] = 倒数第 pos 位（pos=1 为个位），返回左侧高位的字符串 */
+function assembleNumber(prefix, N, values){
+  var s = '';
+  for(var p = N; p >= 1; p--){
+    var ch = (values[prefix + 'd' + p] || '').trim();
+    if(!/^\d$/.test(ch)) return null;
+    s += ch;
+  }
+  return s;
+}
+
+/* B 型展开：基本号 x 起，模 10^N 环上按 interval 等距取另外 m-1 个（不含基本号），补零到 N 位 */
+function expandB(xStr, interval, m, N){
+  var x = Number(xStr), mod = Math.pow(10, N), out = [];
+  for(var k = 1; k < m; k++){
+    var y = (x + k * interval) % mod;
+    out.push(('000000000000' + y).slice(-N));
+  }
+  return out;
+}
+
+/* 单个"末 N 位=x"模式覆盖的中签号数（配号区间 1..total）：
+   x≥1 → floor((total−x)/10^N)+1；x=0 → floor(total/10^N)（"0000 少算一个号"） */
+function coverCount(x, N, total){
+  var mod = Math.pow(10, N);
+  if(x === 0) return Math.floor(total / mod);
+  if(x > total) return 0;
+  return Math.floor((total - x) / mod) + 1;
+}
+
+/* 重号判定（含尾数冲突）：a、b 两模式冲突 ⟺ xa ≡ xb (mod 10^min(Na,Nb))；
+   最后一步的完整号码视为 N=D 的精确模式 */
+function collideAny(x, N, produced){
+  for(var i = 0; i < produced.length; i++){
+    var p = produced[i];
+    var m = Math.pow(10, Math.min(N, p.N));
+    if(x % m === p.x % m) return p;
+  }
+  return null;
+}
+
+/* 环节 live 分组（编号 = 环节编号；C 型拆分占两号） */
+function liveGroupsOf(v){
+  var groups = [], k = 1;
+  v.shown.forEach(function(st){
+    if(st.type === 'C'){
+      groups.push({id:'g' + k, label:k + '——A', N:st.N, m:st.parts[0].m, interval:st.parts[0].interval}); k++;
+      groups.push({id:'g' + k, label:k + '——B', N:st.N, m:st.parts[1].m, interval:st.parts[1].interval || 0}); k++;
+    }else{
+      groups.push({id:'g' + k, label:String(k), N:st.N, m:st.digit, interval:st.interval || 0}); k++;
+    }
+  });
+  return groups;
+}
+
+/* 归集现场状态 → 汇总行 + 已产生/剩余/阶段指引（全部纯计算） */
+function computeLive(v, st){
+  var total = Number(v.total), wc = Number(v.winCount);
+  var firstDigit = Number(v.firstDigit);
+  var produced = [], rows = [], used = 0;
+
+  function checkNums(g, numStrs, label){
+    var xs = [];
+    for(var i = 0; i < numStrs.length; i++){
+      var s = numStrs[i];
+      if(!/^\d+$/.test(s)) return {error:'含非数字'};
+      if(s.length !== g.N) return {error:'须为 ' + g.N + ' 位数字'};
+      xs.push(Number(s));
+    }
+    for(var j = 0; j < xs.length; j++){
+      var bad = collideAny(xs[j], g.N, produced);
+      if(bad) return {error:'与先前中签号码重复（' + ('000000000000' + bad.x).slice(-bad.N) + '），本轮无效需重摇'};
+    }
+    var add = 0;
+    xs.forEach(function(x){ add += coverCount(x, g.N, total); });
+    /* 名额守护为"软警示"：本工具是现场记录辅助，不越权否决现场系统；
+       覆盖数仍计入，但给出醒目提示供人工核对（防录错） */
+    var warn = add > wc - used ? '本轮覆盖 ' + add + ' 个，超出剩余名额（剩 ' + (wc - used) + ' 个），请核对现场系统' : null;
+    xs.forEach(function(x){ produced.push({N:g.N, x:x}); });
+    return {xs:xs, add:add, warn:warn};
+  }
+
+  liveGroupsOf(v).forEach(function(g){
+    var base = (st.values[g.id + 'num'] || '').trim();
+    if(!base){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:'', add:'', status:''}); return; }
+    var list = [base];
+    if(g.m > 1){
+      var exp = (st.values[g.id + 'exp'] || '').trim();
+      if(!exp){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:base + '（另 ' + (g.m - 1) + ' 个未填）', add:'', status:'展开号码未填'}); return; }
+      list = list.concat(exp.split(/[\s、，,；;]+/).filter(function(s){ return s !== ''; }));
+    }
+    var r = checkNums(g, list, g.label);
+    if(r.error){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '), add:'', status:r.error, bad:true}); return; }
+    used += r.add;
+    rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '),
+      each:r.xs.map(function(x){ return coverCount(x, g.N, total); }).join('、'),
+      add:r.add, status:r.warn || '有效', warn:!!r.warn});
+  });
+
+  var maxN = v.maxN;
+  for(var r2 = 1; r2 <= (st.p2Rounds || 1); r2++){
+    var n2 = (st.values['p2_' + r2 + 'num'] || '').trim();
+    if(!n2){ rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:'', add:'', status:''}); continue; }
+    var rr = checkNums({N:maxN}, [n2], '倒数第二步');
+    if(rr.error){ rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:n2, add:'', status:rr.error, bad:true}); continue; }
+    used += rr.add;
+    rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:n2, each:String(coverCount(Number(n2), maxN, total)), add:rr.add, status:rr.warn || '有效', warn:!!rr.warn});
+  }
+
+  for(var rl = 1; rl <= (st.lastRounds || 1); rl++){
+    var nf = (st.values['last_' + rl + 'final'] || '').trim();
+    if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status:''}); continue; }
+    if(!/^\d+$/.test(nf) || nf.length > v.D){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'格式有误', bad:true}); continue; }
+    var xf = Number(nf);
+    if(xf < 1 || xf > total){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'超出配号区间，无效需重摇', bad:true}); continue; }
+    var badF = collideAny(xf, v.D, produced);
+    if(badF){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'与先前中签号码重复，无效需重摇', bad:true}); continue; }
+    produced.push({N:v.D, x:xf}); used += 1;
+    rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status:'有效'});
+  }
+
+  var overBy = used > wc ? used - wc : 0;
+  var remaining = Math.max(0, wc - used);
+  var decision = remaining === 0 ? 'end' : (remaining <= firstDigit ? 'last' : 'p2');
+  return {rows:rows, used:used, remaining:remaining, overBy:overBy, decision:decision};
 }
 
 /* ============ 公告 PDF 文本解析（纯逻辑，可测试） ============ */
@@ -658,8 +823,18 @@ function G(t){
 }
 function M(t){ return {t:t, c:'m'}; }   /* 灰色：生成器辅助指引（可按需删改） */
 
-/* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块） */
-function passParas(N, guest){
+/* live run：可填写/自动计算的空白位。kind: digit 单位数字 | num 号码 | text 自由文本 | comp 计算值；
+   blank = 空白时渲染的下划线数量（与原模板逐字一致）；extra 附带 N/pos/r 等元数据 */
+function LV(id, kind, blank, extra){
+  var live = {id:id, kind:kind, blank:blank};
+  if(extra) for(var k in extra) live[k] = extra[k];
+  return {t:'', c:'r', live:live};
+}
+/* 加轮按钮占位段：预览渲染为按钮行，文本/Word 导出时整段跳过 */
+function ADDBTN(where){ return [{t:'', live:{kind:'addBtn', where:where}}]; }
+
+/* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块；lp 非空时数字位可填写） */
+function passParas(N, guest, lp){
   var out = [];
   var passes = drawPasses(N);
   passes.forEach(function(ps, i){
@@ -676,22 +851,27 @@ function passParas(N, guest){
     }else{
       out.push([B(intro + '请开始摇号'), G('（留意摇号情况）')]);
     }
-    out.push([B('号码已经产生，' + ps.digits.map(function(d){
-      return '倒数第' + d + '位号码是___';
-    }).join('，') + '。')]);
+    var runs = [B('号码已经产生，')];
+    ps.digits.forEach(function(d, di){
+      runs.push(B('倒数第' + d + '位号码是'));
+      runs.push(lp ? LV(lp + 'd' + d, 'digit', 3, {N:N, pos:d}) : B('___'));
+      runs.push(B(di < ps.digits.length - 1 ? '，' : '。'));
+    });
+    out.push(runs);
   });
   if(guest) out.push([B('【感谢' + guest.name + ' ' + guest.honor + ' ，请回位就坐】')]);
   return out;
 }
 
-/* 结果行（留白）：m=1 为单号型，m>1 为基本号+递增型 */
-function resultPara(N, m, liang){
+/* 结果行：m=1 为单号型，m>1 为基本号+递增型；lp 非空时号码位可填写（自动同步/可手工钉住） */
+function resultPara(N, m, liang, lp){
+  var numRun = lp ? LV(lp + 'num', 'num', 12, {N:N}) : R('____________');
   if(m === 1){
-    return [R(N + ' 位数 的中签号码已经产生，是____________'), B(' '), G('（根据显示屏读出）')];
+    return [R(N + ' 位数 的中签号码已经产生，是'), numRun, B(' '), G('（根据显示屏读出）')];
   }
-  return [R(N + ' 位数 的基本中签号码已经产生，是____________'), B(' '), G('（根据显示屏读出）'), B(' '),
-    R('根据电脑程序计算显示，递增或递减  ' + liang + ' ，得到另外  ' + (m - 1) +
-      ' 个中签号码是____________________________________________')];
+  return [R(N + ' 位数 的基本中签号码已经产生，是'), numRun, B(' '), G('（根据显示屏读出）'), B(' '),
+    R('根据电脑程序计算显示，递增或递减  ' + liang + ' ，得到另外  ' + (m - 1) + ' 个中签号码是'),
+    lp ? LV(lp + 'exp', 'num', 44, {N:N, exp:1}) : R('____________________________________________')];
 }
 
 function fanPara(N){
@@ -730,8 +910,38 @@ function openerParas(st, part){
   return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
 }
 
-/* 生成完整主持稿（段落数组，空数组 = 空行） */
-function buildDocument(v){
+/* 最后一步单轮段落（lp=live 前缀；withGuide 仅首轮带灰色指引）。空白计数与原模板逐字一致 */
+function lastRoundParas(v, r, withGuide){
+  var D = v.D;
+  var balls = [];
+  for(var bi = 0; bi <= Number(v.firstDigit); bi++) balls.push(String(bi));
+  var lp = 'last_' + r;
+  var out = [];
+  out.push([R('下面我们摇出  第'), LV(lp + '_idx', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码。')]);
+  passParas(D - 1, null, lp).forEach(function(p){ out.push(p); });
+  out.push([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是'), LV(lp + 'tail', 'num', 12, {N:D - 1}), B(' '), G('（根据显示屏读出）')]);
+  out.push([]);
+  if(withGuide){
+    out.push([M('（指引：接下来确定该号码的最高位（倒数第 ' + D + ' 位）。把刚摇出的后 ' + (D - 1) +
+      ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较——【大于】时，最高位由电脑系统自动分配（取小于首位数字“ ' +
+      v.firstDigit + ' ”的数），按 A 项照屏幕念出；【小于或等于】时，最高位可以是 0～' + v.firstDigit +
+      '，按 B 项由工作人员把 0～' + v.firstDigit + ' 的号球放入 1 号机摇出。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
+  }
+  out.push([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
+  out.push([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
+  out.push([G('（B、小于的情况下：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
+  out.push([B('                                                               '), R(balls.join(' 、 ') + ' 、 ')]);
+  out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
+  out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), LV(lp + 'lead', 'num', 15, {N:1}), B('  '), G('）')]);
+  out.push([]);
+  out.push([R('第'), LV(lp + '_idx2', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码已经产生，是'), LV(lp + 'final', 'num', 22, {N:D})]);
+  out.push([]);
+  return out;
+}
+
+/* 生成完整主持稿（段落数组，空数组 = 空行）；rounds = {p2: 倒数第二步轮数, last: 最后一步轮数} */
+function buildDocument(v, rounds){
+  rounds = rounds || {p2:1, last:1};
   var doc = [];
   function P(){ for(var i = 0; i < arguments.length; i++) doc.push(arguments[i]); }
   function BLANK(){ doc.push([]); }
@@ -778,10 +988,10 @@ function buildDocument(v){
 
   /* ---- 挑选摇号球 ---- */
   P([B('下面有请'), R('主承销商代表'), B(' 随机挑选三组不同的 摇号球。')]);
-  P([B('选出的三组号码球分别是第_____组，第_____组，第_____组，')]);
-  P([B('请工作人员依次将第_____组号码球倒入1号盒中，')]);
-  P([B('              将第_____组号码球倒入2号盒中，')]);
-  P([B('              将第_____组号码球倒入3号盒中，')]);
+  P([B('选出的三组号码球分别是第'), LV('ball1', 'text', 5), B('组，第'), LV('ball2', 'text', 5), B('组，第'), LV('ball3', 'text', 5), B('组，')]);
+  P([B('请工作人员依次将第'), LV('ball4', 'text', 5), B('组号码球倒入1号盒中，')]);
+  P([B('              将第'), LV('ball5', 'text', 5), B('组号码球倒入2号盒中，')]);
+  P([B('              将第'), LV('ball6', 'text', 5), B('组号码球倒入3号盒中，')]);
   P([B('有请公证员检查摇号球'), G('（留意检查情况）')]);
   P([B('请工作人员  将三组摇号球  分别放入摇号机中。'), G('（等待工作人员放置摇号球）')]);
   P([B('请公证员 进场检查 摇号器具。'), G('（公证员讲话）')]);
@@ -814,28 +1024,28 @@ function buildDocument(v){
       var a = st.parts[0], b = st.parts[1];
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——A')]);
       openerParas(st, 'splitA').forEach(function(p){ P(p); });
-      passParas(st.N, guestAt(K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, a.m, a.interval ? numToChinese(a.interval) : ''));
+      passParas(st.N, guestAt(K + 1), 'g' + (K + 1)).forEach(function(p){ P(p); });
+      P(resultPara(st.N, a.m, a.interval ? numToChinese(a.interval) : '', 'g' + (K + 1)));
       BLANK();
       P([G(K + 2 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——B')]);
       openerParas(st, 'splitB').forEach(function(p){ P(p); });
-      passParas(st.N, guestAt(K + 2)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, b.m, b.interval ? numToChinese(b.interval) : ''));
+      passParas(st.N, guestAt(K + 2), 'g' + (K + 2)).forEach(function(p){ P(p); });
+      P(resultPara(st.N, b.m, b.interval ? numToChinese(b.interval) : '', 'g' + (K + 2)));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 2;
     }else{
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit)]);
       openerParas(st).forEach(function(p){ P(p); });
-      passParas(st.N, guestAt(K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, st.digit, st.interval ? numToChinese(st.interval) : ''));
+      passParas(st.N, guestAt(K + 1), 'g' + (K + 1)).forEach(function(p){ P(p); });
+      P(resultPara(st.N, st.digit, st.interval ? numToChinese(st.interval) : '', 'g' + (K + 1)));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 1;
     }
   });
 
-  /* ---- 倒数第二步 ---- */
+  /* ---- 倒数第二步（可多轮，rounds.p2） ---- */
   var maxN = v.maxN;
   var dnMax = DENOM_NAMES[maxN];
   P([G(K + 1 + ' 、倒数第二步')]);
@@ -845,39 +1055,28 @@ function buildDocument(v){
   P([M('（指引：本步为收尾环节。电脑屏幕会显示还剩多少个中签号码未产生——剩余个数大于配号总数首位数字“ ' +
        v.firstDigit + ' ”时，按上述流程再摇一轮；小于或等于“ ' + v.firstDigit +
        ' ”时进入最后一步；若剩余为 0，屏幕提示“摇号结束”，直接念结束语。）')]);
-  P([B('下面我们摇出 '), R(dnMax + ' 分之  1'), B(' 的中签号码，'),
-     R('摇出一个  ' + maxN + ' 位数 的中签号码。')]);
-  passParas(maxN, null).forEach(function(p){ P(p); });
-  P(resultPara(maxN, 1, ''));
-  BLANK();
+  for(var r2 = 1; r2 <= rounds.p2; r2++){
+    P([B('下面我们摇出 '), R(dnMax + ' 分之  1'), B(' 的中签号码，'),
+       R('摇出一个  ' + maxN + ' 位数 的中签号码。')]);
+    passParas(maxN, null, 'p2_' + r2).forEach(function(p){ P(p); });
+    P(resultPara(maxN, 1, '', 'p2_' + r2));
+    BLANK();
+  }
+  P(ADDBTN('p2'));
   P(fanPara(maxN));
   BLANK();
 
-  /* ---- 最后一步 ---- */
+  /* ---- 最后一步（可多轮，rounds.last） ---- */
   var D = v.D;
-  var balls = [];
-  for(var bi = 0; bi <= Number(v.firstDigit); bi++) balls.push(String(bi));
   P([G(K + 2 + ' 、最后一步')]);
-  P([R('经计算，现在还有 ____ 个 ' + D + ' 位数的中签号码未产生。')]);
+  P([R('经计算，现在还有 '), LV('remainingEcho', 'comp', 4), R(' 个 ' + D + ' 位数的中签号码未产生。')]);
   P([G('（重复下面的步骤，直到 剩余号码个数 为0）')]);
   P([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
-  P([R('下面我们摇出  第_____个（最后一个）  ' + D + ' 位数的中签号码。')]);
-  passParas(D - 1, null).forEach(function(p){ P(p); });
-  P([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是____________'), B(' '), G('（根据显示屏读出）')]);
-  BLANK();
-  P([M('（指引：接下来确定该号码的最高位（倒数第 ' + D + ' 位）。把刚摇出的后 ' + (D - 1) +
-       ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较——【大于】时，最高位由电脑系统自动分配（取小于首位数字“ ' +
-       v.firstDigit + ' ”的数），按 A 项照屏幕念出；【小于或等于】时，最高位可以是 0～' + v.firstDigit +
-       '，按 B 项由工作人员把 0～' + v.firstDigit + ' 的号球放入 1 号机摇出。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
-  P([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
-  P([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 _____ '), B(' '), G('）')]);
-  P([G('（B、小于的情况下：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
-  P([B('                                                               '), R(balls.join(' 、 ') + ' 、 ')]);
-  P([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
-  P([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是_______________  '), G('）')]);
-  BLANK();
+  for(var rl = 1; rl <= rounds.last; rl++){
+    lastRoundParas(v, rl, rl === 1).forEach(function(p){ P(p); });
+  }
+  P(ADDBTN('last'));
   P([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
-  P([R('第_____个（最后一个）  ' + D + ' 位数的中签号码已经产生，是______________________')]);
   P([G('（留意剩余号码个数，如果不为0，则重复上面的步骤，直到 最后一个  ' + D + ' 位数的中签号码产生）')]);
   BLANK();
   P(fanPara(D));
@@ -971,20 +1170,49 @@ function buildSkeletonDoc(type){
 
 /* ============ 渲染：纯文本 / 网页预览 / Word（.docx） ============ */
 
-function docToText(doc){
-  return doc.map(function(p){
-    return p.map(function(r){ return r.t; }).join('');
-  }).join('\n');
+/* live run 空白渲染：下划线数量与原模板逐字一致 */
+function blankOf(live){ return new Array((live.blank || 1) + 1).join('_'); }
+/* live run → 文本：resolve 提供当前值，空值按下划线留白 */
+function runToText(r, resolve){
+  if(!r.live) return r.t;
+  if(r.live.kind === 'addBtn') return null;   /* 加轮按钮段：文本导出整段跳过 */
+  var val = resolve ? resolve(r.live) : '';
+  return val || blankOf(r.live);
+}
+
+function docToText(doc, resolve){
+  var out = [];
+  doc.forEach(function(p){
+    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return;
+    out.push(p.map(function(r){ return runToText(r, resolve); }).join(''));
+  });
+  return out.join('\n');
 }
 
 function escHtml(s){
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function docToPreviewHtml(doc){
+function docToPreviewHtml(doc, state){
   return doc.map(function(p){
     if(p.length === 0) return '<p class="blank">&nbsp;</p>';
+    if(p.length === 1 && p[0].live && p[0].live.kind === 'addBtn'){
+      return '<p class="lv-addrow no-print"><button type="button" class="btn ghost btn-sm" data-addround="' +
+        p[0].live.where + '">＋ 再摇一轮</button></p>';
+    }
     var inner = p.map(function(r){
+      if(r.live){
+        var lv = r.live;
+        var val = (state && state.values[lv.id]) || '';
+        if(lv.kind === 'comp'){
+          return '<span class="v lvcomp" data-live="' + lv.id + '">' + escHtml(val || blankOf(lv)) + '</span>';
+        }
+        var w = lv.kind === 'digit' ? '' :
+          ' style="width:' + (lv.exp ? Math.min((lv.N + 1) * 5, 46) : (lv.N ? lv.N + 2 : lv.blank + 1)) + 'ch"';
+        var cls = 'v lv ' + (lv.kind === 'digit' ? 'dig' : lv.kind === 'text' ? 'txt' : 'num') + (lv.exp ? ' exp' : '');
+        return '<input class="' + cls + '" data-live="' + lv.id + '" value="' + escHtml(val) + '"' + w +
+          (lv.kind === 'digit' ? ' maxlength="1" inputmode="numeric"' : '') + ' autocomplete="off" spellcheck="false">';
+      }
       var t = escHtml(r.t);
       if(r.c === 'r') return '<span class="v">' + t + '</span>';
       if(r.c === 'g') return '<span class="g">' + t + '</span>';
@@ -1044,10 +1272,12 @@ function zipStore(entries){
   return new Blob(chunks, {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
 }
 
-/* 由文档模型生成真实 .docx：A4、2.5cm 页边距、14pt 微软雅黑、1.75 倍行距，红绿灰三色与网页一致 */
-function docToDocxBlob(doc){
+/* 由文档模型生成真实 .docx：A4、2.5cm 页边距、14pt 微软雅黑、2 倍行距，红绿灰三色与网页一致；
+   live run 经 resolve 带当前值（空则留白），addBtn 段整段跳过 */
+function docToDocxBlob(doc, resolve){
   function runXml(r){
-    var t = escHtml(r.t);
+    if(r.live && r.live.kind === 'addBtn') return '';
+    var t = escHtml(runToText(r, resolve));
     if(!t) return '';
     var color = r.c === 'r' ? 'FF0000' : r.c === 'g' ? '228B22' : r.c === 'm' ? '94A3B8' : '';
     return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
@@ -1058,6 +1288,7 @@ function docToDocxBlob(doc){
       '<w:t xml:space="preserve">' + t + '</w:t></w:r>';
   }
   var paras = doc.map(function(p){
+    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
     return '<w:p><w:pPr><w:spacing w:after="80" w:line="480" w:lineRule="auto"/></w:pPr>' +
       p.map(runXml).join('') + '</w:p>';
   }).join('');
@@ -1288,19 +1519,32 @@ if(typeof document !== 'undefined'){
     }
     errorBox.textContent = '';
     var v = res.v;
-    var doc = buildDocument(v);
-    currentText = docToText(doc);
-    currentDocxBlob = docToDocxBlob(doc);
+    /* 现场实时辅助：恢复同签名会话状态（仪式中途刷新不丢），否则全新状态 */
+    liveV = v;
+    var sig = liveSig(v);
+    liveState = loadLive(sig) || {sig:sig, values:{}, pinned:{}, p2Rounds:1, lastRounds:1};
+    liveState.values = liveState.values || {};
+    liveState.pinned = liveState.pinned || {};
+    liveState.p2Rounds = liveState.p2Rounds || 1;
+    liveState.lastRounds = liveState.lastRounds || 1;
+    var doc = buildDocument(v, {p2:liveState.p2Rounds, last:liveState.lastRounds});
+    liveDoc = doc;
+    buildLiveIndex(doc);
+    buildGroupMap();
+    currentText = docToText(doc, resolveLiveRun);
+    currentDocxBlob = docToDocxBlob(doc, resolveLiveRun);
     currentFileName = '摇号抽签仪式主持稿-' +
       v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.docx';
     renderOverview(v);
     overviewCard.style.display = '';
-    scriptDoc.innerHTML = docToPreviewHtml(doc);
+    scriptDoc.innerHTML = docToPreviewHtml(doc, liveState);
+    liveCard.style.display = '';
     outputArea.style.display = '';
+    updateLive();
     generatedOnce = true;
   }
 
-  /* 空表状态：显示主持稿示意骨架（表单决定的部分留白），总览表隐藏 */
+  /* 空表状态：显示主持稿示意骨架（表单决定的部分留白），总览表与现场记录卡隐藏 */
   var generatedOnce = false;
   function renderSkeleton(){
     generatedOnce = false;
@@ -1309,9 +1553,220 @@ if(typeof document !== 'undefined'){
     currentDocxBlob = docToDocxBlob(doc);
     currentFileName = '摇号抽签仪式主持稿.docx';
     overviewCard.style.display = 'none';
+    liveCard.style.display = 'none';
+    liveV = null; liveState = null; liveDoc = null;
     scriptDoc.innerHTML = docToPreviewHtml(doc);
     outputArea.style.display = '';
   }
+
+  /* ============ 现场实时辅助层 ============ */
+  var liveV = null;          /* 当前生成数据的 v */
+  var liveState = null;      /* {sig, values, pinned, p2Rounds, lastRounds, cache} */
+  var liveDoc = null;        /* 当前文档模型（含轮次） */
+  var liveIndex = {};        /* liveId → live 描述 */
+  var liveGroupMap = {};     /* 数字组前缀 → {N, m, interval} */
+  var liveCard = document.getElementById('liveCard');
+  var liveStatus = document.getElementById('liveStatus');
+  var liveTable = document.getElementById('liveTable');
+  var liveClearBtn = document.getElementById('liveClearBtn');
+
+  function liveSig(v){ return [v.company, v.client, v.total, v.rateNorm, v.type].join('|'); }
+
+  function saveLive(){
+    if(!liveState) return;
+    try{
+      sessionStorage.setItem('nssg_live', JSON.stringify({
+        sig:liveState.sig, values:liveState.values, pinned:liveState.pinned,
+        p2Rounds:liveState.p2Rounds, lastRounds:liveState.lastRounds }));
+    }catch(e){}
+  }
+  function loadLive(sig){
+    try{
+      var s = JSON.parse(sessionStorage.getItem('nssg_live') || 'null');
+      if(s && s.sig === sig && s.values) return s;
+    }catch(e){}
+    return null;
+  }
+
+  function buildLiveIndex(doc){
+    liveIndex = {};
+    doc.forEach(function(p){
+      p.forEach(function(r){ if(r.live && r.live.id) liveIndex[r.live.id] = r.live; });
+    });
+  }
+  function buildGroupMap(){
+    liveGroupMap = {};
+    liveGroupsOf(liveV).forEach(function(g){ liveGroupMap[g.id] = g; });
+    var r;
+    for(r = 1; r <= liveState.p2Rounds; r++) liveGroupMap['p2_' + r] = {N:liveV.maxN, m:1, interval:0};
+    for(r = 1; r <= liveState.lastRounds; r++) liveGroupMap['last_' + r] = {N:liveV.D - 1, m:1, interval:0};
+  }
+
+  /* 导出/渲染共用的值解析器：comp 取计算缓存，其余取已填值 */
+  function resolveLiveRun(live){
+    if(!liveState) return '';
+    if(live.kind === 'comp'){
+      if(live.r) return String(live.r);
+      if(live.id === 'remainingEcho'){
+        return Object.keys(liveState.values).length ? String(computeLive(liveV, liveState).remaining) : '';
+      }
+      return '';
+    }
+    return liveState.values[live.id] || '';
+  }
+
+  /* 自动同步某字段（未被手工钉住时）：autoVal 为空则清空 */
+  function syncAuto(id, autoVal){
+    if(!liveState || liveState.pinned[id]) return;
+    var el = scriptDoc.querySelector('input[data-live="' + id + '"]');
+    if(autoVal){ liveState.values[id] = autoVal; if(el) el.value = autoVal; }
+    else{ delete liveState.values[id]; if(el) el.value = ''; }
+  }
+
+  /* 手工清空某字段后恢复自动同步 */
+  function resyncField(id){
+    var m = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
+    if(!m) return;
+    var prefix = m[1], kind = m[2];
+    if(kind === 'num' || kind === 'tail'){
+      var d1 = liveIndex[prefix + 'd1'];
+      if(d1) syncAuto(id, assembleNumber(prefix, d1.N, liveState.values));
+    }else if(kind === 'exp'){
+      var g = liveGroupMap[prefix];
+      var base = liveState.values[prefix + 'num'];
+      syncAuto(id, (g && g.m > 1 && base) ? expandB(base, g.interval, g.m, g.N).join(' ') : null);
+    }else if(kind === 'final'){
+      syncLastFinal(prefix);
+    }
+  }
+
+  /* 最后一步：尾数 + 最高位（A 分配位优先，否则 B 摇出位）→ 自动拼装最终号码 */
+  function syncLastFinal(prefix){
+    var tail = liveState.values[prefix + 'tail'];
+    var lead = liveState.values[prefix + 'assign'] || liveState.values[prefix + 'lead'];
+    var fin = (tail && lead && /^\d$/.test(lead) && tail.length === liveV.D - 1) ? lead + tail : null;
+    syncAuto(prefix + 'final', fin);
+  }
+
+  function renderLiveTable(cache){
+    var html = '<thead><tr><th>环节/轮次</th><th>位数</th><th>中签号码</th><th>每个覆盖个数</th><th>本次新增</th><th>状态</th></tr></thead><tbody>';
+    var any = false;
+    cache.rows.forEach(function(rw){
+      if(!rw.nums && !rw.status) return;
+      any = true;
+      html += '<tr class="' + (rw.bad ? 'bad' : rw.warn ? 'warn' : '') + '"><td>' + escHtml(rw.label) + '</td><td>末 ' + rw.N + ' 位</td><td class="nums">' +
+        escHtml(rw.nums) + '</td><td class="nums">' + escHtml(rw.each || '') + '</td><td>' + rw.add + '</td><td>' +
+        escHtml(rw.status || '有效') + '</td></tr>';
+    });
+    if(!any) html += '<tr><td colspan="6" style="color:var(--muted)">填写摇号数字后，此处实时更新中签号码与个数</td></tr>';
+    liveTable.innerHTML = html + '</tbody>';
+  }
+
+  function renderLiveStatus(cache){
+    var touched = liveState && Object.keys(liveState.values).length > 0;
+    var dText = !touched ? '<span style="color:var(--muted)">填写摇号数字后自动判定当前步骤</span>'
+      : cache.decision === 'end' ? '<span class="st-end">摇号结束，直接念结束语</span>'
+      : cache.decision === 'last' ? '<span class="st-last">剩余 ≤ 首位数字 ' + liveV.firstDigit + ' → 进入最后一步</span>'
+      : '<span class="st-p2">剩余 &gt; 首位数字 ' + liveV.firstDigit + ' → 倒数第二步再摇一轮</span>';
+    liveStatus.innerHTML = '共需中签号码 <b>' + liveV.winCount + '</b> 个 ｜ 已产生 <b>' + cache.used + '</b> 个 ｜ 剩余 <b>' +
+      cache.remaining + '</b> 个' +
+      (cache.overBy ? ' <span class="st-over">（超出 ' + cache.overBy + ' 个，请核对）</span>' : '') +
+      ' ｜ ' + dText;
+  }
+
+  function updateLive(){
+    if(!liveV || !liveState) return;
+    var cache = computeLive(liveV, liveState);
+    liveState.cache = cache;
+    scriptDoc.querySelectorAll('span[data-live]').forEach(function(sp){
+      var lv = liveIndex[sp.getAttribute('data-live')];
+      if(lv) sp.textContent = resolveLiveRun(lv) || blankOf(lv);
+    });
+    scriptDoc.querySelectorAll('input.lv-bad').forEach(function(el){ el.classList.remove('lv-bad'); });
+    cache.rows.forEach(function(rw){
+      if(rw.bad && rw.id){
+        var el = scriptDoc.querySelector('input[data-live="' + rw.id + '"]');
+        if(el) el.classList.add('lv-bad');
+      }
+    });
+    renderLiveTable(cache);
+    renderLiveStatus(cache);
+    saveLive();
+  }
+
+  /* 重建文档（加轮/清空后）：保状态、重渲染 */
+  function rebuildLiveDoc(){
+    liveDoc = buildDocument(liveV, {p2:liveState.p2Rounds, last:liveState.lastRounds});
+    buildLiveIndex(liveDoc);
+    buildGroupMap();
+    scriptDoc.innerHTML = docToPreviewHtml(liveDoc, liveState);
+    updateLive();
+  }
+
+  /* 输入事件：数字位过滤+自动同步+跳格；号码/文本位手工钉住语义 */
+  scriptDoc.addEventListener('input', function(e){
+    var el = e.target;
+    if(!el.getAttribute || !liveState) return;
+    var id = el.getAttribute('data-live');
+    if(!id) return;
+    var lv = liveIndex[id];
+    if(!lv) return;
+    if(lv.kind === 'digit'){
+      var ch = el.value.replace(/\D/g, '').slice(-1);
+      if(el.value !== ch) el.value = ch;
+      if(ch) liveState.values[id] = ch; else delete liveState.values[id];
+      var prefix = id.replace(/d\d+$/, '');
+      var asm = assembleNumber(prefix, lv.N, liveState.values);
+      syncAuto(/^last_\d+$/.test(prefix) ? prefix + 'tail' : prefix + 'num', asm);
+      var g = liveGroupMap[prefix];
+      if(g && g.m > 1) syncAuto(prefix + 'exp', asm ? expandB(asm, g.interval, g.m, lv.N).join(' ') : null);
+      if(/^last_\d+$/.test(prefix)) syncLastFinal(prefix);
+      if(ch){
+        var next = scriptDoc.querySelector('input[data-live="' + prefix + 'd' + (lv.pos + 1) + '"]');
+        if(next) next.focus();
+      }
+    }else{
+      var val = el.value;
+      var m2 = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
+      if(val.trim() === ''){
+        delete liveState.values[id];
+        delete liveState.pinned[id];
+        resyncField(id);
+      }else{
+        liveState.values[id] = val.replace(/\s+$/, '');
+        liveState.pinned[id] = true;
+        if(m2){
+          var prefix = m2[1], kind = m2[2];
+          var g = liveGroupMap[prefix];
+          /* 手工填基本号时，B 型展开行同步自动计算（展开行未被钉住才同步） */
+          if(kind === 'num' && g && g.m > 1) syncAuto(prefix + 'exp', expandB(val.trim(), g.interval, g.m, g.N).join(' '));
+          if(kind === 'tail' || kind === 'lead' || kind === 'assign') syncLastFinal(prefix);
+        }
+      }
+    }
+    updateLive();
+  });
+
+  /* 加轮按钮 */
+  scriptDoc.addEventListener('click', function(e){
+    var btn = e.target && e.target.closest ? e.target.closest('[data-addround]') : null;
+    if(!btn || !liveState) return;
+    if(btn.getAttribute('data-addround') === 'p2') liveState.p2Rounds++;
+    else liveState.lastRounds++;
+    saveLive();
+    rebuildLiveDoc();
+  });
+
+  /* 清空已填写 */
+  liveClearBtn.addEventListener('click', function(){
+    if(!liveState) return;
+    liveState.values = {};
+    liveState.pinned = {};
+    liveState.p2Rounds = 1;
+    liveState.lastRounds = 1;
+    saveLive();
+    rebuildLiveDoc();
+  });
 
   genBtn.addEventListener('click', generate);
   resetBtn.addEventListener('click', function(){ fillForm(DEFAULTS_IPO); generate(); });
@@ -1338,14 +1793,15 @@ if(typeof document !== 'undefined'){
   });
 
   copyBtn.addEventListener('click', function(){
-    if(!currentText) return;
+    var text = liveDoc ? docToText(liveDoc, resolveLiveRun) : currentText;   /* 点击时取当前已填值 */
+    if(!text) return;
     function done(){
       copyBtn.textContent = '已复制 ✓';
       setTimeout(function(){ copyBtn.textContent = '一键复制全文'; }, 1500);
     }
     function fallback(){
       var ta = document.createElement('textarea');
-      ta.value = currentText;
+      ta.value = text;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
@@ -1354,7 +1810,7 @@ if(typeof document !== 'undefined'){
       document.body.removeChild(ta);
     }
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(currentText).then(done, fallback);
+      navigator.clipboard.writeText(text).then(done, fallback);
     }else{
       fallback();
     }
@@ -1362,9 +1818,10 @@ if(typeof document !== 'undefined'){
 
   wordBtn.addEventListener('click', function(){
     if(wxGuard()) return;
-    if(!currentDocxBlob) return;
+    var blob = liveDoc ? docToDocxBlob(liveDoc, resolveLiveRun) : currentDocxBlob;   /* 点击时取当前已填值 */
+    if(!blob) return;
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(currentDocxBlob);
+    a.href = URL.createObjectURL(blob);
     a.download = currentFileName;
     document.body.appendChild(a);
     a.click();
