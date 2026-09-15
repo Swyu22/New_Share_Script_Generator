@@ -548,10 +548,12 @@ function computeLive(v, st){
     }
     var r = checkNums(g, list, g.label);
     if(r.error){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '), add:'', status:r.error, bad:true}); return; }
+    /* 展开个数应为 m（基本号 + 另外 m-1 个）：个数不符时软警示（仍按实填计入，供人工核对） */
+    var cntWarn = list.length !== g.m ? '号码个数应为 ' + g.m + ' 个（基本号＋另外 ' + (g.m - 1) + ' 个），当前 ' + list.length + ' 个，请核对' : null;
     used += r.add;
     rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '),
       each:r.xs.map(function(x){ return coverCount(x, g.N, total); }).join('、'),
-      add:r.add, status:r.warn || '有效', warn:!!r.warn});
+      add:r.add, status:r.warn || cntWarn || '有效', warn:!!(r.warn || cntWarn)});
   });
 
   var maxN = v.maxN;
