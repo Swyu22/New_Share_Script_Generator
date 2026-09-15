@@ -585,7 +585,11 @@ function computeLive(v, st){
 
 /* ============ 公告 PDF 文本解析（纯逻辑，可测试） ============ */
 
-/* 巨潮微信阅读器链接解码：?obj= 为（双重）URL 编码的 JSON {"docUrl":"finalpage/…"} */
+/* 公告网址分类解析：
+   ① 巨潮微信阅读器链接：?obj= 为（双重）URL 编码的 JSON {"docUrl":"finalpage/…"}
+   ② 巨潮公告详情页：/new/disclosure/detail?announcementId=…&announcementTime=YYYY-MM-DD
+      → 拼接直链 static.cninfo.com.cn/finalpage/{日期}/{id}.PDF
+   ③ 其余按 PDF 直链处理（http 升 https，避免混合内容拦截） */
 function resolvePdfUrl(raw){
   var s = String(raw == null ? '' : raw).trim();
   if(!s) return {ok:false, error:'请输入公告 PDF 网址，或选择本地 PDF 文件'};
@@ -600,8 +604,17 @@ function resolvePdfUrl(raw){
       if(!/^https?:\/\//i.test(s)) s = 'https://static.cninfo.com.cn/' + s.replace(/^\/+/, '');
     }catch(e){ return {ok:false, error:'无法解析链接中的 obj 参数，请直接粘贴 PDF 文件地址'}; }
   }
+  if(/\/new\/disclosure\/detail/i.test(s)){
+    var aid = s.match(/[?&]announcementId=(\d+)/i);
+    var atime = s.match(/[?&]announcementTime=(\d{4})-(\d{1,2})-(\d{1,2})/i);
+    if(aid && atime){
+      var date = atime[1] + '-' + ('0' + atime[2]).slice(-2) + '-' + ('0' + atime[3]).slice(-2);
+      return {ok:true, url:'https://static.cninfo.com.cn/finalpage/' + date + '/' + aid[1] + '.PDF'};
+    }
+    return {ok:false, error:'详情页链接缺少 announcementId 或 announcementTime 参数，请改用 PDF 直链或本地文件'};
+  }
   if(!/^https?:\/\//i.test(s)) return {ok:false, error:'网址须以 http:// 或 https:// 开头'};
-  s = s.replace(/^http:\/\//i, 'https://');   /* 页面为 https，避免混合内容拦截 */
+  s = s.replace(/^http:\/\//i, 'https://');
   return {ok:true, url:s};
 }
 
