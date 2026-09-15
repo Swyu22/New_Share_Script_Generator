@@ -104,7 +104,7 @@ fieldset .btn-row{margin-top:12px}   /* fieldset 内网格与按钮行的间距�
 .live-actions{margin-top:12px}
 #liveTable tr.bad td{color:var(--red)}
 #liveTable tr.warn td:last-child{color:#b45309}
-#liveTable td.nums{white-space:normal;min-width:180px}
+#liveTable td.nums{white-space:normal;min-width:260px}
 .lv{font:inherit;letter-spacing:inherit;border:none;border-bottom:2px solid var(--blue);background:var(--blue-50);border-radius:4px 4px 0 0;color:#FF0000;font-weight:700;text-align:center;padding:0 2px;margin:0 1px}
 .lv:focus{outline:none;background:#fff;border-bottom-color:var(--blue-dark)}
 .lv.dig{width:2.4ch}
@@ -241,7 +241,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
     </div>
     <div id="clientGuestRows"></div>
     <button class="btn ghost btn-sm" id="addClientGuest" type="button">＋ 增加主承销商嘉宾</button>
-    <div class="hint">摇号环节按编号依次邀请嘉宾：环节1→第1位嘉宾，环节2→第2位，以此类推（顺序＝先主承销商后发行人）。</div>
+    <div class="hint">摇号环节按编号依次邀请嘉宾：环节1→第1位嘉宾，环节2→第2位，以此类推（顺序＝先发行人后主承销商）。</div>
   </fieldset>
   <fieldset>
     <legend>嘉宾（发行人，可选）</legend>
@@ -564,17 +564,37 @@ function computeLive(v, st){
     rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:n2, each:String(coverCount(Number(n2), maxN, total)), add:rr.add, status:rr.warn || '有效', warn:!!rr.warn});
   }
 
+  var LD = Number(v.lastDigits);
+  var drawnLeads = [];
   for(var rl = 1; rl <= (st.lastRounds || 1); rl++){
     var nf = (st.values['last_' + rl + 'final'] || '').trim();
-    if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status:''}); continue; }
+    /* 可用号球：按尾数与配号总数后 D−1 位比较定基集（大于→0..首位−1，小于等于→0..首位），
+       再减去此前各轮已摇出的最高位（末位球摇出不再放回，每球只有一次机会） */
+    var tailStr = (st.values['last_' + rl + 'tail'] || '').trim();
+    if(!tailStr && nf && nf.length === v.D) tailStr = nf.slice(1);
+    var T = null, pool = null;
+    if(/^\d+$/.test(tailStr) && tailStr.length === v.D - 1){
+      T = Number(tailStr);
+      var hi = T > LD ? firstDigit - 1 : firstDigit;
+      var basePool = [];
+      for(var b2 = 0; b2 <= hi; b2++) basePool.push(b2);
+      pool = basePool.filter(function(b){ return drawnLeads.indexOf(b) < 0; });
+      /* 通用兜底：可用球被此前轮次耗尽时按基集重新放回（尾数不同，号码天然不同） */
+      if(pool.length === 0) pool = basePool.slice();
+    }
+    if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status: pool ? '可用号球：' + pool.join('、') : ''}); continue; }
     if(!/^\d+$/.test(nf) || nf.length > v.D){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'格式有误', bad:true}); continue; }
     if(nf.length < v.D) nf = ('000000000000' + nf).slice(-v.D);   /* 补前导零至配号位数（完整号码约定为 D 位） */
     var xf = Number(nf);
     if(xf < 1 || xf > total){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'超出配号区间，无效需重摇', bad:true}); continue; }
     var badF = collideAny(xf, v.D, produced);
     if(badF){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'与先前中签号码重复，无效需重摇', bad:true}); continue; }
+    var leadX = Number(nf.charAt(0));
+    var poolWarn = pool && pool.indexOf(leadX) < 0 ? '最高位 ' + leadX + ' 不在可用号球范围（可用：' + pool.join('、') + '），请核对' : null;
     produced.push({N:v.D, x:xf}); used += 1;
-    rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status:'有效'});
+    /* 仅"小于"分支（1 号机摇出的号球）摇出不放回；A 分支系统自动分配不消耗号球 */
+    if(T !== null && T <= LD) drawnLeads.push(leadX);
+    rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status: poolWarn || '有效', warn: !!poolWarn});
   }
 
   var overBy = used > wc ? used - wc : 0;
@@ -783,7 +803,7 @@ function prepareData(raw){
   v.issuerGuestCo = (raw.issuerGuestCo || '').trim() || v.company;
   v.clientGuests = cg;
   v.issuerGuests = ig;
-  v.guests = cg.concat(ig);   /* 环节分配顺序：先主承销商后发行人 */
+  v.guests = ig.concat(cg);   /* 环节分配顺序：环节1→发行人嘉宾，其后主承销商嘉宾 */
 
   if(!/^\d+$/.test((raw.issue || '').trim()) || Number(raw.issue) <= 0) return fail('网上定价发行量须为正整数');
   if(!/^\d+$/.test((raw.shares || '').trim()) || Number(raw.shares) <= 0) return fail('每号股数须为正整数');
@@ -901,7 +921,7 @@ function resultPara(N, m, liang, lp){
   }
   return [R(N + ' 位数 的基本中签号码已经产生，是'), numRun, B(' '), G('（根据显示屏读出）'), B(' '),
     R('根据电脑程序计算显示，递增或递减  ' + liang + ' ，得到另外  ' + (m - 1) + ' 个中签号码是'),
-    lp ? LV(lp + 'exp', 'num', 44, {N:N, exp:1}) : R('____________________________________________')];
+    lp ? LV(lp + 'exp', 'num', 44, {N:N, exp:1, m:m}) : R('____________________________________________')];
 }
 
 function fanPara(N){
@@ -961,6 +981,9 @@ function lastRoundParas(v, r, withGuide){
   out.push([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
   out.push([G('（B、小于的情况下：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
   out.push([B('                                                               '), R(balls.join(' 、 ') + ' 、 ')]);
+  /* 主持人对镜头再念一遍球号（数字汉字读法） */
+  var ballsCn = balls.map(function(b){ return CN_DIGITS[Number(b)]; });
+  out.push([R(ballsCn.join(' 、 ') + ' 、 ')]);
   out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
   out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), LV(lp + 'lead', 'num', 15, {N:1}), B('  '), G('）')]);
   out.push([]);
@@ -985,16 +1008,16 @@ function buildDocument(v, rounds){
   P([B('本次摇号抽签是由')]);
   P([B(v.client + ' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
      G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
-  if(v.clientGuests.length){
-    P([B('来自主承销商方面的嘉宾有：')]);
-    v.clientGuests.forEach(function(g){
-      P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
-    });
-  }
   if(v.issuerGuests.length){
     P([B('来自发行人方面的嘉宾有：')]);
     v.issuerGuests.forEach(function(g){
       P([B(v.issuerGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
+    });
+  }
+  if(v.clientGuests.length){
+    P([B('来自主承销商方面的嘉宾有：')]);
+    v.clientGuests.forEach(function(g){
+      P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
     });
   }
   P([B('同时还有来自' + v.office + '：' + v.notary1 + ' 公证员 和 ' + v.notary2 + ' 公证人员。')]);
@@ -1042,10 +1065,10 @@ function buildDocument(v, rounds){
 
   /* ---- 摇号环节 ---- */
   var K = 0;
-  function guestAt(num){   /* 环节编号 → 第 num 位嘉宾（先主承销商后发行人）；超出则不安排 */
+  function guestAt(num){   /* 环节编号 → 第 num 位嘉宾（先发行人后主承销商）；超出则不安排 */
     if(num > v.guests.length) return null;
     var g = v.guests[num - 1];
-    var co = num <= v.clientGuests.length ? v.clientGuestCo : v.issuerGuestCo;
+    var co = num <= v.issuerGuests.length ? v.issuerGuestCo : v.clientGuestCo;
     return {client:co, title:g.title, name:g.name, honor:g.honor};
   }
   v.shown.forEach(function(st){
@@ -1078,12 +1101,11 @@ function buildDocument(v, rounds){
   var maxN = v.maxN;
   var dnMax = DENOM_NAMES[maxN];
   P([G(K + 1 + ' 、倒数第二步')]);
-  P([G('留意剩余号码个数，如剩余号码个数小于或等于配号总数首位数字“ ' + v.firstDigit + ' ”，则进入： ' +
-       (K + 2) + ' 、最后一步，（如剩余号码个数等于0，电脑屏幕会提示“摇号结束”，则直接结束语）。')]);
-  P([G('如剩余号码个数大于配号总数首位数字“ ' + v.firstDigit + ' ”，则重复如下流程：')]);
-  P([M('（指引：本步为收尾环节。电脑屏幕会显示还剩多少个中签号码未产生——剩余个数大于配号总数首位数字“ ' +
-       v.firstDigit + ' ”时，按上述流程再摇一轮；小于或等于“ ' + v.firstDigit +
-       ' ”时进入最后一步；若剩余为 0，屏幕提示“摇号结束”，直接念结束语。）')]);
+  P([G('留意剩余号码个数，')]);
+  P([G('1.如果剩余号码个数等于0，电脑屏幕会提示“摇号结束”，则直接结束语。')]);
+  P([G('2.如剩余号码个数小于或等于配号总数首位数字“ ' + v.firstDigit + ' ”，则进入： ' +
+       (K + 2) + ' 、最后一步。')]);
+  P([G('3.如果剩余号码个数大于配号总数首位数字“ ' + v.firstDigit + ' ”，则重复倒数第二步流程，直至剩余号码个数小于或等于配号总数的首位数字为止。')]);
   for(var r2 = 1; r2 <= rounds.p2; r2++){
     P([B('下面我们摇出 '), R(dnMax + ' 分之  1'), B(' 的中签号码，'),
        R('摇出一个  ' + maxN + ' 位数 的中签号码。')]);
@@ -1239,7 +1261,7 @@ function docToPreviewHtml(doc, state){
           return '<span class="v lvcomp" data-live="' + lv.id + '">' + escHtml(val || blankOf(lv)) + '</span>';
         }
         var w = lv.kind === 'digit' ? '' :
-          ' style="width:' + (lv.exp ? Math.min((lv.N + 1) * 5, 46) : (lv.N ? lv.N + 2 : lv.blank + 1)) + 'ch"';
+          ' style="width:' + (lv.exp ? Math.min((lv.N + 1) * ((lv.m || 2) - 1) + 2, 70) : (lv.N ? lv.N + 2 : lv.blank + 1)) + 'ch"';
         var cls = 'v lv ' + (lv.kind === 'digit' ? 'dig' : lv.kind === 'text' ? 'txt' : 'num') + (lv.exp ? ' exp' : '');
         return '<input class="' + cls + '" data-live="' + lv.id + '" value="' + escAttr(val) + '"' + w +
           ' aria-label="' + (lv.kind === 'digit' ? '倒数第' + lv.pos + '位' : lv.kind === 'text' ? '现场填写' : '号码') + '"' +
