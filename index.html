@@ -652,27 +652,43 @@ function parseAnnouncement(rawText){
   function cap(re){ var m = text.match(re); return m ? m[1] : null; }
   var fields = {}, notes = [], missing = [];
 
-  var company = cap(/发行人[：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司))/) ||
+  var company = cap(/发行人[：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司|有限公司))/) ||
                 cap(/([一-龥]{4,40}?股份有限公司)首次公开发行/);
   if(company) fields.company = company; else missing.push('发行公司全称');
 
-  var client = cap(/保荐人[（(]主承销商[）)][：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司))/) ||
-               cap(/主承销商[：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司))/);
-  if(client) fields.client = client; else missing.push('主承销商全称');
+  /* 主承销商：依次尝试 联席保荐人（联席主承销商）：→ 保荐人（主承销商）：→ 主承销商：→ 头部留白版式
+     （名称在"以下简称"保荐人（主承销商）"之前）；捕获含"特别提示/公告"等杂质的视为误捕继续下一条 */
+  var CLIENT_RULES = [
+    /联席保荐人[（(]联席主承销商[）)][：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司|有限公司))/,
+    /保荐人[（(]主承销商[）)][：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司|有限公司))/,
+    /主承销商[：:]([^，。；：、（）()]{4,40}?(?:股份有限公司|有限责任公司|有限公司))/,
+    /(?:和|与|及)?([一-龥]{4,40}?(?:股份有限公司|有限责任公司|有限公司))（以下简称["“]?保荐人[（(]主承销商[）)]/
+  ];
+  for(var ci = 0; ci < CLIENT_RULES.length; ci++){
+    var chit = text.match(CLIENT_RULES[ci]);
+    if(chit){
+      var cname = chit[1].replace(/^[和与及、，]/, '');
+      if(!/特别提示|董事会|公告/.test(cname)){ fields.client = cname; break; }
+    }
+  }
+  if(!fields.client) missing.push('主承销商全称');
 
-  /* 网上定价发行量：优先回拨后"网上最终发行数量"；可转债以"张"计 */
+  /* 网上定价发行量：优先回拨后"网上最终发行数量"；可转债以"张"计；
+     版式差异：股数可能以"万股"（457.8000 万股）或纯"股"（12,497,000 股）表述；
+     可转债为"总计为 X 张"或"共 X 张"或"为 X 张"，或以"Y 元（X 张）"表述 */
   var issueRules = [
-    {re:/网上最终发行数量[为：:]?([\d,]+(?:\.\d+)?)万股/, unit:'万股'},
-    {re:/网上向社会公众投资者发行[^，。;；]{0,40}?总计[为：:]?([\d,]+(?:\.\d+)?)张/, unit:'张'},
-    {re:/网上初始发行数量[为：:]?([\d,]+(?:\.\d+)?)万股/, unit:'万股'},
-    {re:/网上定价(?:初始)?发行[^，。;；]{0,25}?([\d,]+(?:\.\d+)?)万股/, unit:'万股'},
-    {re:/网上发行(?:数量|股数)[为：:]?([\d,]+(?:\.\d+)?)股/, unit:'股'}
+    {re:/网上最终发行数量[为：:]?([\d,]+(?:\.\d+)?)(万)?股/, unit:'股'},
+    {re:/网上向社会公众投资者发行[^，。;；]{0,50}?元[（(]([\d,]+)\s*张[）)]/, unit:'张'},
+    {re:/网上向社会公众投资者发行[^，。;；]{0,40}?(?:总计|共|为)[为：:]?([\d,]+(?:\.\d+)?)张/, unit:'张'},
+    {re:/网上初始发行数量[为：:]?([\d,]+(?:\.\d+)?)(万)?股/, unit:'股'},
+    {re:/网上定价(?:初始)?发行[^，。;；]{0,25}?([\d,]+(?:\.\d+)?)(万)?股/, unit:'股'},
+    {re:/网上发行(?:数量|股数)[为：:]?([\d,]+(?:\.\d+)?)(万)?股/, unit:'股'}
   ];
   for(var i = 0; i < issueRules.length; i++){
     var hit = text.match(issueRules[i].re);
     if(hit){
-      var v = issueRules[i].unit === '万股' ? wanToWhole(hit[1]) : cnNum(hit[1]);
-      if(v){ fields.issue = v; fields.issueUnit = issueRules[i].unit === '万股' ? '股' : issueRules[i].unit; break; }
+      var v = hit[2] === '万' ? wanToWhole(hit[1]) : cnNum(hit[1]);
+      if(v){ fields.issue = v; fields.issueUnit = issueRules[i].unit; break; }
     }
   }
   if(!fields.issue) missing.push('网上定价发行量');
@@ -1888,7 +1904,15 @@ if(typeof document !== 'undefined'){
             return pdf.getPage(pageNo).then(function(page){
               return page.getTextContent();
             }).then(function(tc){
-              return acc + '\n' + tc.items.map(function(it){ return it.str; }).join('\n');
+              /* 按 hasEOL 重组真实文本行：逐项换行会把行内数字碎片（如"10"）挤成
+                 独立行，被页码剔除误删；真实换行符才能区分页脚页码与行内数字 */
+              var line = '', lines = [];
+              tc.items.forEach(function(it){
+                line += it.str;
+                if(it.hasEOL){ lines.push(line); line = ''; }
+              });
+              if(line) lines.push(line);
+              return acc + '\n' + lines.join('\n');
             });
           });
         })(p);
