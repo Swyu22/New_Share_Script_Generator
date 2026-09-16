@@ -466,14 +466,15 @@ function assembleNumber(prefix, N, values){
   return s;
 }
 
-/* B 型展开：基本号 x 起，模 10^N 环上按 interval 等距取另外 m-1 个（不含基本号），补零到 N 位 */
+/* B 型展开：基本号 x 起，模 10^N 环上按 interval 等距取另外 m-1 个（不含基本号），
+   补零到 N 位并按由小到大排序展示 */
 function expandB(xStr, interval, m, N){
   var x = Number(xStr), mod = Math.pow(10, N), out = [];
   for(var k = 1; k < m; k++){
     var y = (x + k * interval) % mod;
     out.push(('000000000000' + y).slice(-N));
   }
-  return out;
+  return out.sort();
 }
 
 /* 单个"末 N 位=x"模式覆盖的中签号数（配号区间 1..total）：
@@ -547,11 +548,11 @@ function computeLive(v, st){
       list = list.concat(exp.split(/[\s、，,；;]+/).filter(function(s){ return s !== ''; }));
     }
     var r = checkNums(g, list, g.label);
-    if(r.error){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '), add:'', status:r.error, bad:true}); return; }
+    if(r.error){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.slice().sort().join(' '), add:'', status:r.error, bad:true}); return; }
     /* 展开个数应为 m（基本号 + 另外 m-1 个）：个数不符时软警示（仍按实填计入，供人工核对） */
     var cntWarn = list.length !== g.m ? '号码个数应为 ' + g.m + ' 个（基本号＋另外 ' + (g.m - 1) + ' 个），当前 ' + list.length + ' 个，请核对' : null;
     used += r.add;
-    rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.join(' '),
+    rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.slice().sort().join(' '),
       each:r.xs.map(function(x){ return coverCount(x, g.N, total); }).join('、'),
       add:r.add, status:r.warn || cntWarn || '有效', warn:!!(r.warn || cntWarn)});
   });
@@ -584,7 +585,7 @@ function computeLive(v, st){
       /* 通用兜底：可用球被此前轮次耗尽时按基集重新放回（尾数不同，号码天然不同） */
       if(pool.length === 0) pool = basePool.slice();
     }
-    if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status: pool ? '可用号球：' + pool.join('、') : ''}); continue; }
+    if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status: pool ? (pool.length === 1 ? '仅剩 ' + pool[0] + ' 号球（系统自动分配）' : '可用号球：' + pool.join('、')) : ''}); continue; }
     if(!/^\d+$/.test(nf) || nf.length > v.D){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'格式有误', bad:true}); continue; }
     if(nf.length < v.D) nf = ('000000000000' + nf).slice(-v.D);   /* 补前导零至配号位数（完整号码约定为 D 位） */
     var xf = Number(nf);
@@ -594,8 +595,8 @@ function computeLive(v, st){
     var leadX = Number(nf.charAt(0));
     var poolWarn = pool && pool.indexOf(leadX) < 0 ? '最高位 ' + leadX + ' 不在可用号球范围（可用：' + pool.join('、') + '），请核对' : null;
     produced.push({N:v.D, x:xf}); used += 1;
-    /* 仅"小于"分支（1 号机摇出的号球）摇出不放回；A 分支系统自动分配不消耗号球 */
-    if(T !== null && T <= LD) drawnLeads.push(leadX);
+    /* 机摇（本轮可选号球多于 1 个）摇出的号球不再放回；系统自动分配（仅剩 1 个可选）不消耗号球 */
+    if(T !== null && pool && pool.length > 1) drawnLeads.push(leadX);
     rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status: poolWarn || '有效', warn: !!poolWarn});
   }
 
@@ -996,14 +997,16 @@ function lastRoundParas(v, r, withGuide){
   out.push([]);
   if(withGuide){
     out.push([M('（指引：接下来确定该号码的最高位（倒数第 ' + D + ' 位）。把刚摇出的后 ' + (D - 1) +
-      ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较——【大于】时，最高位由电脑系统自动分配（取小于首位数字“ ' +
-      v.firstDigit + ' ”的数），按 A 项照屏幕念出；【小于或等于】时，最高位可以是 0～' + v.firstDigit +
-      '，按 B 项由工作人员把 0～' + v.firstDigit + ' 的号球放入 1 号机摇出。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
+      ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较，情形如下：')]);
+    out.push([M('（1.大于时最高位可取 0～' + (Number(v.firstDigit) - 1) + '；')]);
+    out.push([M('（2.小于或等于时最高位可取 0～' + v.firstDigit + '；')]);
+    out.push([M('（3.只剩一个可选号码时，由电脑系统自动分配，按 A 项照屏幕念出；有多个可选号码时，按 B 项由工作人员把相应号球放入 1 号机摇出（已摇出的号球不再放回，下一轮可用球相应减少）。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
+    out.push([M('（注：各环节分子可能因剩余名额由现场系统调整（如 千万4→3、亿1→9），一切以电脑显示屏与剩余个数为准。）')]);
   }
   out.push([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
   out.push([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
   out.push([G('（B、小于的情况下：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
-  out.push([B('                                                               '), R(balls.join(' 、 ') + ' 、 ')]);
+  out.push([R(balls.join(' 、 ') + ' 、 ')]);   /* 球号行顶格左对齐（与汉字行一致） */
   /* 主持人对镜头再念一遍球号（数字汉字读法） */
   var ballsCn = balls.map(function(b){ return CN_DIGITS[Number(b)]; });
   out.push([R(ballsCn.join(' 、 ') + ' 、 ')]);
