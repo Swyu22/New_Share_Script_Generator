@@ -135,7 +135,7 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
   padding:34px 38px;
 }
 .script-doc p{
-  font-size:10.5pt;line-height:1.0;   /* 五号字，单倍行距（空行段落同值） */
+  font-size:1.06rem;line-height:2;   /* 屏幕预览：字号/行距保持旧版（导出 Word/PDF 为五号/1.0，见 @media print） */
   letter-spacing:.06em;              /* 字距（左右）统一为项目现有值 */
   white-space:pre-wrap;
   overflow-wrap:anywhere;      /* 长下划线/空格串在窄屏可折行，防横向溢出 */
@@ -154,15 +154,17 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   .lv-addrow{display:none}
 }
 
-/* 页眉块（预览顶部一次 + 打印每页重复）：末位尾数速查表 + 红字配号总数 */
-.page-header{text-align:center;font-size:10.5pt;line-height:1.4;border-bottom:1px dashed var(--line);padding-bottom:6px;margin-bottom:12px}
+/* 页眉块（预览顶部一次 + 打印每页重复）：左对齐三行速查表 + 红字配号总数（首位大两号加粗） */
+.page-header{text-align:left;font-size:1.06rem;line-height:1.4;border-bottom:1px dashed var(--line);padding-bottom:6px;margin-bottom:12px}
 .page-header .v{color:#FF0000;font-weight:700}
+.page-header .big{font-size:1.333em;font-weight:700}   /* 配号总数首位：大两号（五号→四号比例） */
 /* 打印逐页页眉：真实 <table><thead> 结构（Chrome 打印每页重复 thead 并预留位置；CSS display 模拟不重复，勿改回） */
 .print-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:normal}   /* fixed：列宽由容器定，窄屏不横向撑开；normal：覆盖全局 table nowrap */
 .print-table td{padding:0;border:none;text-align:left;vertical-align:top}   /* 覆盖全局 td 居中/边框样式 */
 @media print{
   @page{margin:40pt 50pt}
-  .page-header{background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
+  .page-header{font-size:10.5pt;background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
+  .print-table.pb{page-break-before:always}   /* 摇号说法查阅表：新起一页（拆表方案，单元格内强制分页不稳，勿改回） */
 }
 
 /* 微信内导出引导遮罩（微信内置浏览器不支持网页下载与打印，引导到系统浏览器） */
@@ -188,7 +190,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   table{font-size:.8rem}
   th,td{padding:6px 8px}
   .script-doc{padding:18px 14px}
-  .script-doc p{font-size:10.5pt;line-height:1.0}
+  .script-doc p{font-size:.92rem;line-height:2}
   .actions{justify-content:stretch}
   .actions .btn{flex:1 1 100%}
 }
@@ -1028,55 +1030,56 @@ function lastRoundParas(v, r, withGuide){
   return out;
 }
 
-/* 《摇号说法查阅表（临场应变参考）》：整段标准说法、数字留空；各级标题绿色斜体（附注除外） */
+/* 《摇号说法查阅表（临场应变参考）》：整段标准说法、数字留空；配色——主标题黑（带 pb 分页标记）、
+   "用法"与"附：最后一步选球常识"整块灰色、五段标题绿色斜体、正文黑色、正文括号内提示绿色斜体 */
 function lookupParas(){
   return [
-    [B('【摇号说法查阅表（临场应变参考）】')],
-    [B('用法：现场情形与计划不一致时，找到对应情形的那一段，照着念，并把电脑屏幕上显示的数字填入空格。摇号顺序均为：先摇个位、再摇十位、再摇百位，每轮至多 3 台摇号机；位数更多时按同样方式继续。')],
+    [{t:'【摇号说法查阅表（临场应变参考）】', pb:true}],
+    [M('用法：现场情形与计划不一致时，找到对应情形的那一段，照着念，并把电脑屏幕上显示的数字填入空格。摇号顺序均为：先摇个位、再摇十位、再摇百位，每轮至多 3 台摇号机；位数更多时按同样方式继续。')],
     [],
     [G('一、正常环节（只摇一个号码）')],
-    [M('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [M('摇号过程：先摇个位、再摇十位、再摇百位，每轮至多 3 台机；位数更多时按同样方式继续')],
-    [M('____ 位数 的中签号码已经产生，是____________ （根据显示屏读出）')],
-    [M('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
+    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
+    [B('摇号过程：先摇个位、再摇十位、再摇百位，每轮至多 3 台机；位数更多时按同样方式继续')],
+    [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
+    [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('二、正常环节（一个基本号码＋递增或递减出其余号码）')],
-    [M('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
-    [M('摇号过程同上')],
-    [M('____ 位数 的基本中签号码已经产生，是____________ （根据显示屏读出） 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
-    [M('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
+    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
+    [B('摇号过程同上')],
+    [B('____ 位数 的基本中签号码已经产生，是____________ '), G('（根据显示屏读出）'), B(' 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
+    [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('三、拆分环节（拆成两段分别摇）')],
-    [M('下面我们摇出 ____ 分之 ____ 的中签号码，将 ____ 分之 ____ 拆分成 ____ 分之 ____ 和 ____ 分之 ____ 。')],
-    [M('首先我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
-    [M('摇号过程同上')],
-    [M('____ 位数 的基本中签号码已经产生，是____________ （根据显示屏读出） 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
-    [M('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [M('摇号过程同上；若此段多于 1 个号码，说法同"二"')],
-    [M('____ 位数 的中签号码已经产生，是____________ （根据显示屏读出）')],
-    [M('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
+    [B('下面我们摇出 ____ 分之 ____ 的中签号码，将 ____ 分之 ____ 拆分成 ____ 分之 ____ 和 ____ 分之 ____ 。')],
+    [B('首先我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
+    [B('摇号过程同上')],
+    [B('____ 位数 的基本中签号码已经产生，是____________ '), G('（根据显示屏读出）'), B(' 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
+    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 的中签号码。')],
+    [B('摇号过程同上；若此段多于 1 个号码，说法同"二"')],
+    [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
+    [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('四、倒数第二步（剩余号码较多时重复此段）')],
-    [M('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [M('摇号过程同上')],
-    [M('____ 位数 的中签号码已经产生，是____________ （根据显示屏读出）')],
-    [M('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
+    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
+    [B('摇号过程同上')],
+    [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
+    [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('五、最后一步（逐个产生完整号码）')],
-    [M('经计算，现在还有 ____ 个 ____ 位数的中签号码未产生。')],
-    [M('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')],
-    [M('摇号过程同上，先摇出后几位')],
-    [M('____ 位数的后 ____ 位号码已经产生，是____________ （根据显示屏读出）')],
-    [M('由于大于（小于） 配号总数的后 ____ 位数 ____________')],
-    [M('A、大于的情况下： 系统自动分配 倒数第 ____ 位号码为 _____ ')],
-    [M('B、小于的情况下： 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')],
-    [M('____ 、')],
-    [M('请由1号机摇出倒数第 ____ 位的号码   （留意摇号情况）')],
-    [M('倒数第 ____ 位号码已经产生，是_______________  ')],
-    [M('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
-    [M('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
+    [B('经计算，现在还有 ____ 个 ____ 位数的中签号码未产生。')],
+    [B('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')],
+    [B('摇号过程同上，先摇出后几位')],
+    [B('____ 位数的后 ____ 位号码已经产生，是____________ '), G('（根据显示屏读出）')],
+    [B('由于大于（小于） 配号总数的后 ____ 位数 ____________')],
+    [B('A、大于的情况下： 系统自动分配 倒数第 ____ 位号码为 _____ ')],
+    [B('B、小于的情况下： 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')],
+    [B('____ 、')],
+    [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
+    [B('倒数第 ____ 位号码已经产生，是_______________  ')],
+    [B('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
+    [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
-    [B('附：最后一步选球常识')],
+    [M('附：最后一步选球常识')],
     [M('比较后位数字与配号总数后位数字：大于时，号球从 0 放到（首位数字减 1）；小于或等于时，号球从 0 放到首位数字。只剩一个可选号码时由电脑自动分配；有多个可选号码时放入 1 号机摇出。已摇出的号球不再放回，下一轮从范围中去掉后再摇。')]
   ];
 }
@@ -1350,9 +1353,35 @@ function escHtml(s){
 /* 属性上下文转义（input value="…"）：防引号突破属性 */
 function escAttr(s){ return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
-/* 页眉块 HTML（预览与打印共用）：末位尾数速查表 + 红字配号总数 */
+/* 页眉块 HTML（预览与打印共用）：左对齐三行速查表——行2 以 5 个全角空格缩进（6 与行1 的 1 上下对齐），
+   行3 红字配号总数（首位数字大两号并加粗；占位符不放大） */
 function pageHeaderHtml(total){
-  return '<div class="page-header"><span>末位尾数：1→十分之 2→百分之 3→千分之 4→万分之 5→十万分之 6→百万分之 7→千万分之 8→亿分之 9→十亿分之 10→百亿分之</span> <span class="v">配号总数：' + escHtml(total) + '</span></div>';
+  var totalStr = String(total);
+  var big = /^\d/.test(totalStr);
+  var totalHtml = big
+    ? '<span class="big">' + escHtml(totalStr.charAt(0)) + '</span>' + escHtml(totalStr.slice(1))
+    : escHtml(totalStr);
+  return '<div class="page-header">' +
+    '<div>末位尾数：1→十分之&nbsp;&nbsp;2→百分之&nbsp;&nbsp;3→千分之&nbsp;&nbsp;4→万分之&nbsp;&nbsp;5→十万分之</div>' +
+    '<div>　　　　　6→百万分之&nbsp;&nbsp;7→千万分之&nbsp;&nbsp;8→亿分之&nbsp;&nbsp;9→十亿分之&nbsp;&nbsp;10→百亿分之</div>' +
+    '<div class="v">配号总数：' + totalHtml + '</div></div>';
+}
+
+/* 在 pb（新起一页）标记段处拆分文档：无标记 → [doc]；有标记 → [主体, 标记起至末尾] */
+function splitAtPageBreak(doc){
+  for(var i = 0; i < doc.length; i++){
+    if(doc[i].some && doc[i].some(function(r){ return r.pb; })) return [doc.slice(0, i), doc.slice(i)];
+  }
+  return [doc];
+}
+
+/* 主持稿预览 HTML：一个或多个 print-table（pb 拆分处另起表格，打印时第二个表 page-break-before 新起一页；
+   每表自带 thead 页眉 → 拆分出的查阅表页面同样有页眉） */
+function scriptTablesHtml(total, doc, state){
+  return splitAtPageBreak(doc).map(function(paras, i){
+    return '<table class="print-table' + (i > 0 ? ' pb' : '') + '"><thead><tr><td>' + pageHeaderHtml(total) +
+      '</td></tr></thead><tbody><tr><td>' + docToPreviewHtml(paras, state) + '</td></tr></tbody></table>';
+  }).join('');
 }
 
 function docToPreviewHtml(doc, state){
@@ -1435,20 +1464,24 @@ function zipStore(entries){
   return new Blob(chunks, {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
 }
 
-/* 页眉部件：居中"末位尾数→分位"速查表两段，末尾红字配号总数（随文档动态填入） */
+/* 页眉部件：左对齐"末位尾数→分位"速查表三行——行2 以 5 个全角空格缩进（与"末位尾数："同宽，使 6 与行1 的 1 上下对齐），
+   行3 红字配号总数（随文档动态填入，首位数字大两号=四号 14pt 并加粗） */
 function headerXml(total){
-  function para(runs){ return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' + runs + '</w:p>'; }
-  function run(t, red){
+  function para(runs){ return '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' + runs + '</w:p>'; }
+  function run(t, red, sz){
     return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
       (red ? '<w:color w:val="FF0000"/><w:b/><w:bCs/>' : '') +
-      '<w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr>' +
+      '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>' +
       '<w:t xml:space="preserve">' + escHtml(t) + '</w:t></w:r>';
   }
+  var totalStr = String(total);
+  var big = /^\d/.test(totalStr);   /* 占位符（________）不放大首字符 */
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-    para(run('末位尾数：1→十分之    2→百分之    3→千分之   4→万分之    5→十万分之', false)) +
-    para(run('6→百万分之  7→千万分之  8→亿分之   9→十亿分之  10→百亿分之    ', false) +
-         run('配号总数：' + total, true)) +
+    para(run('末位尾数：1→十分之  2→百分之  3→千分之  4→万分之  5→十万分之', false, 21)) +
+    para(run('　　　　　6→百万分之  7→千万分之  8→亿分之  9→十亿分之  10→百亿分之', false, 21)) +
+    para(run('配号总数：', true, 21) +
+         (big ? run(totalStr.charAt(0), true, 28) + run(totalStr.slice(1), true, 21) : run(totalStr, true, 21))) +
     '</w:hdr>';
 }
 
@@ -1470,7 +1503,9 @@ function docToDocxBlob(doc, resolve, headerTotal){
   }
   var paras = doc.map(function(p){
     if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
-    return '<w:p><w:pPr><w:spacing w:after="80" w:line="240" w:lineRule="auto"/></w:pPr>' +
+    var pb = p.some(function(r){ return r.pb; });   /* 新起一页标记（摇号说法查阅表首段） */
+    return '<w:p><w:pPr>' + (pb ? '<w:pageBreakBefore/>' : '') +
+      '<w:spacing w:after="80" w:line="240" w:lineRule="auto"/></w:pPr>' +
       p.map(runXml).join('') + '</w:p>';
   }).join('');
   var documentXml =
@@ -1721,8 +1756,7 @@ if(typeof document !== 'undefined'){
       v.company.replace(/\s*股份有限公司\s*$/, '').replace(/\s+/g, '') + '.docx';
     renderOverview(v);
     overviewCard.style.display = '';
-    scriptDoc.innerHTML = '<table class="print-table"><thead><tr><td>' + pageHeaderHtml(v.total) +
-      '</td></tr></thead><tbody><tr><td>' + docToPreviewHtml(doc, liveState) + '</td></tr></tbody></table>';
+    scriptDoc.innerHTML = scriptTablesHtml(v.total, doc, liveState);
     liveCard.style.display = '';
     outputArea.style.display = '';
     updateLive();
@@ -1886,8 +1920,7 @@ if(typeof document !== 'undefined'){
     liveDoc = buildDocument(liveV, {p2:liveState.p2Rounds, last:liveState.lastRounds});
     buildLiveIndex(liveDoc);
     buildGroupMap();
-    scriptDoc.innerHTML = '<table class="print-table"><thead><tr><td>' + pageHeaderHtml(liveV.total) +
-      '</td></tr></thead><tbody><tr><td>' + docToPreviewHtml(liveDoc, liveState) + '</td></tr></tbody></table>';
+    scriptDoc.innerHTML = scriptTablesHtml(liveV.total, liveDoc, liveState);
     updateLive();
   }
 
