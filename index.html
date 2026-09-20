@@ -79,7 +79,6 @@ fieldset .btn-row{margin-top:12px}   /* fieldset 内网格与按钮行的间距�
 .btn:disabled{opacity:.6;cursor:default}
 .url-row{display:flex;gap:12px}
 .url-row input{flex:1;min-width:0}
-.paste-btn{flex:none;width:40px;padding:0}
 
 /* 嘉宾动态行 */
 .guest-row{display:grid;grid-template-columns:1.5fr 1fr .7fr 40px;gap:12px;margin:12px 0 0}
@@ -161,10 +160,12 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 /* 打印逐页页眉：真实 <table><thead> 结构（Chrome 打印每页重复 thead 并预留位置；CSS display 模拟不重复，勿改回） */
 .print-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:normal}   /* fixed：列宽由容器定，窄屏不横向撑开；normal：覆盖全局 table nowrap */
 .print-table td{padding:0;border:none;text-align:left;vertical-align:top}   /* 覆盖全局 td 居中/边框样式 */
+.print-table.pb tbody p{font-size:.9rem}   /* 查阅表：小五（屏幕按比例缩小） */
 @media print{
   @page{size:A4;margin:25mm}   /* 与 Word 一致：A4、2.5cm 页边距 */
   .page-header{font-size:10.5pt;background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
   .print-table.pb{page-break-before:always}   /* 摇号说法查阅表：新起一页（拆表方案，单元格内强制分页不稳，勿改回） */
+  .print-table.pb tbody p{font-size:9pt}   /* 查阅表：小五（与 Word sz 18 一致） */
 }
 
 /* 微信内导出引导遮罩（微信内置浏览器不支持网页下载与打印，引导到系统浏览器） */
@@ -230,7 +231,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
     <legend>从公告 PDF 自动填充（可选）</legend>
     <div class="grid">
       <div class="fld"><label>公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label>
-        <div class="url-row"><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…"><button class="btn ghost paste-btn" id="pasteBtn" type="button" title="粘贴剪贴板内容" aria-label="粘贴"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></button></div>
+        <div class="url-row"><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…（点「解析 PDF 并填充」自动粘贴剪贴板链接）"></div>
       </div>
       <div class="fld"><label>或选择本地 PDF 文件（优先于网址）</label><input id="fPdfFile" type="file" accept="application/pdf,.pdf"></div>
     </div>
@@ -1100,8 +1101,10 @@ function lookupParas(){
     [G('（此处进入通用摇号环节）')],
     [B('____ 位数的后 ____ 位号码已经产生，是____________ '), G('（根据显示屏读出）')],
     [B('由于大于（小于） 配号总数的后 ____ 位数 ____________')],
-    [G('（A、大于的情况下：使用号球 0～（首位数字减 1）；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
+    [G('（A、大于的情况下：使用号球 0～首位数字减 1；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
     [G('（只剩一个可选号码时：由电脑系统自动分配，照屏幕念出）')],
+    [B('系统自动分配 倒数第_____位号码为 _____')],
+    [G('（否则，有多个可选号码时，念出）')],
     [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（对镜头用汉字再念一遍）')],
     [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
@@ -1385,17 +1388,21 @@ function escHtml(s){
 function escAttr(s){ return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 /* 页眉块 HTML（预览与打印共用）：左对齐三行速查表——行2 以 5 个全角空格缩进（6 与行1 的 1 上下对齐），
-   行3 红字配号总数（首位数字大两号并加粗；占位符不放大） */
+   行3 红字配号总数（首位数字大两号并加粗；占位符不放大；total 传 null 时不显示该行，用于查阅表页） */
 function pageHeaderHtml(total){
-  var totalStr = String(total);
-  var big = /^\d/.test(totalStr);
-  var totalHtml = big
-    ? '<span class="big">' + escHtml(totalStr.charAt(0)) + '</span>' + escHtml(totalStr.slice(1))
-    : escHtml(totalStr);
+  var totalLine = '';
+  if(total != null){
+    var totalStr = String(total);
+    var big = /^\d/.test(totalStr);
+    var totalHtml = big
+      ? '<span class="big">' + escHtml(totalStr.charAt(0)) + '</span>' + escHtml(totalStr.slice(1))
+      : escHtml(totalStr);
+    totalLine = '<div class="v">配号总数：' + totalHtml + '</div>';
+  }
   return '<div class="page-header">' +
     '<div>末位尾数：1→十分之&nbsp;&nbsp;2→百分之&nbsp;&nbsp;3→千分之&nbsp;&nbsp;4→万分之&nbsp;&nbsp;5→十万分之</div>' +
     '<div>　　　　　6→百万分之&nbsp;&nbsp;7→千万分之&nbsp;&nbsp;8→亿分之&nbsp;&nbsp;9→十亿分之&nbsp;&nbsp;10→百亿分之</div>' +
-    '<div class="v">配号总数：' + totalHtml + '</div></div>';
+    totalLine + '</div>';
 }
 
 /* 在 pb（新起一页）标记段处拆分文档：无标记 → [doc]；有标记 → [主体, 标记起至末尾] */
@@ -1407,10 +1414,10 @@ function splitAtPageBreak(doc){
 }
 
 /* 主持稿预览 HTML：一个或多个 print-table（pb 拆分处另起表格，打印时第二个表 page-break-before 新起一页；
-   每表自带 thead 页眉 → 拆分出的查阅表页面同样有页眉） */
+   每表自带 thead 页眉；查阅表所在表页眉不含配号总数、正文小五字） */
 function scriptTablesHtml(total, doc, state){
   return splitAtPageBreak(doc).map(function(paras, i){
-    return '<table class="print-table' + (i > 0 ? ' pb' : '') + '"><thead><tr><td>' + pageHeaderHtml(total) +
+    return '<table class="print-table' + (i > 0 ? ' pb' : '') + '"><thead><tr><td>' + pageHeaderHtml(i > 0 ? null : total) +
       '</td></tr></thead><tbody><tr><td>' + docToPreviewHtml(paras, state) + '</td></tr></tbody></table>';
   }).join('');
 }
@@ -1496,7 +1503,7 @@ function zipStore(entries){
 }
 
 /* 页眉部件：左对齐"末位尾数→分位"速查表三行——行2 以 5 个全角空格缩进（与"末位尾数："同宽，使 6 与行1 的 1 上下对齐），
-   行3 红字配号总数（随文档动态填入，首位数字大两号=四号 14pt 并加粗） */
+   行3 红字配号总数（随文档动态填入，首位数字大两号=四号 14pt 并加粗）；total 传 null 时不输出配号总数行（查阅表所在节用） */
 function headerXml(total){
   function para(runs){ return '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' + runs + '</w:p>'; }
   function run(t, red, sz){
@@ -1505,21 +1512,26 @@ function headerXml(total){
       '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>' +
       '<w:t xml:space="preserve">' + escHtml(t) + '</w:t></w:r>';
   }
-  var totalStr = String(total);
-  var big = /^\d/.test(totalStr);   /* 占位符（________）不放大首字符 */
+  var totalPara = '';
+  if(total != null){
+    var totalStr = String(total);
+    var big = /^\d/.test(totalStr);   /* 占位符（________）不放大首字符 */
+    totalPara = para(run('配号总数：', true, 21) +
+         (big ? run(totalStr.charAt(0), true, 28) + run(totalStr.slice(1), true, 21) : run(totalStr, true, 21)));
+  }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
     para(run('末位尾数：1→十分之  2→百分之  3→千分之  4→万分之  5→十万分之', false, 21)) +
     para(run('　　　　　6→百万分之  7→千万分之  8→亿分之  9→十亿分之  10→百亿分之', false, 21)) +
-    para(run('配号总数：', true, 21) +
-         (big ? run(totalStr.charAt(0), true, 28) + run(totalStr.slice(1), true, 21) : run(totalStr, true, 21))) +
+    totalPara +
     '</w:hdr>';
 }
 
 /* 由文档模型生成真实 .docx：A4、2.5cm 页边距、五号微软雅黑、1.0 倍行距，红绿灰三色与网页一致；
-   live run 经 resolve 带当前值（空则留白），addBtn 段整段跳过；页眉为速查表+红字配号总数 */
+   live run 经 resolve 带当前值（空则留白），addBtn 段整段跳过；
+   查阅表（pb 标记起）为小五 9pt，并自该页起分节——新节页眉不含配号总数（下一页分节符兼作分页） */
 function docToDocxBlob(doc, resolve, headerTotal){
-  function runXml(r){
+  function runXml(r, sz){
     if(r.live && r.live.kind === 'addBtn') return '';
     var t = escHtml(runToText(r, resolve));
     if(!t) return '';
@@ -1529,23 +1541,27 @@ function docToDocxBlob(doc, resolve, headerTotal){
       (r.c === 'r' ? '<w:b/><w:bCs/>' : '') +      /* 填入/计算值：加粗 */
       (r.c === 'g' ? '<w:i/><w:iCs/>' : '') +      /* 现场提示语：斜体 */
       '<w:spacing w:val="17"/>' +                  /* 字距 0.06em（14pt×0.06≈0.84pt＝17/20pt） */
-      '<w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr>' +   /* 五号 10.5pt */
+      '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>' +   /* 五号 10.5pt / 查阅表小五 9pt */
       '<w:t xml:space="preserve">' + t + '</w:t></w:r>';
   }
-  var paras = doc.map(function(p){
+  var sectPr = function(rid){
+    return '<w:sectPr><w:headerReference w:type="default" r:id="' + rid + '"/><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>';
+  };
+  var inLookup = false;
+  var paras = doc.map(function(p, idx){
     if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
-    var pb = p.some(function(r){ return r.pb; });   /* 新起一页标记（摇号说法查阅表首段） */
-    return '<w:p><w:pPr>' + (pb ? '<w:pageBreakBefore/>' : '') +
-      '<w:spacing w:after="80" w:line="240" w:lineRule="auto"/></w:pPr>' +
-      p.map(runXml).join('') + '</w:p>';
+    if(p.some(function(r){ return r.pb; })) inLookup = true;   /* 查阅表起改小五 */
+    /* 下一段为查阅表首段时，本段末尾插入分节符（新节页眉不含配号总数，分页由分节符承担） */
+    var nextPb = idx + 1 < doc.length && doc[idx + 1].some(function(r){ return r.pb; });
+    return '<w:p><w:pPr><w:spacing w:after="80" w:line="240" w:lineRule="auto"/>' + (nextPb ? sectPr('rId2') : '') + '</w:pPr>' +
+      p.map(function(r){ return runXml(r, inLookup ? '18' : '21'); }).join('') + '</w:p>';
   }).join('');
   var documentXml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' +
     paras +
-    '<w:sectPr><w:headerReference w:type="default" r:id="rId2"/><w:pgSz w:w="11906" w:h="16838"/>' +
-    '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="851" w:footer="992" w:gutter="0"/>' +
-    '</w:sectPr></w:body></w:document>';
+    sectPr('rId3') + '</w:body></w:document>';
   var contentTypes =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -1553,6 +1569,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<Default Extension="xml" ContentType="application/xml"/>' +
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
     '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+    '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
     '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
     '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
     '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
@@ -1569,6 +1586,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
     '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>' +
+    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>' +
     '</Relationships>';
   var stylesXml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -1599,7 +1617,8 @@ function docToDocxBlob(doc, resolve, headerTotal){
     {name:'word/document.xml', data:enc.encode(documentXml)},
     {name:'word/_rels/document.xml.rels', data:enc.encode(docRels)},
     {name:'word/styles.xml', data:enc.encode(stylesXml)},
-    {name:'word/header1.xml', data:enc.encode(headerXml(headerTotal == null ? '________' : headerTotal))}
+    {name:'word/header1.xml', data:enc.encode(headerXml(headerTotal == null ? '________' : headerTotal))},
+    {name:'word/header2.xml', data:enc.encode(headerXml(null))}   /* 查阅表所在节：页眉不含配号总数 */
   ]);
 }
 
@@ -1646,7 +1665,6 @@ if(typeof document !== 'undefined'){
   var pdfStatus = document.getElementById('pdfStatus');
   var fPdfUrl = document.getElementById('fPdfUrl');
   var fPdfFile = document.getElementById('fPdfFile');
-  var pasteBtn = document.getElementById('pasteBtn');
   var fType = document.getElementById('fType');
   var resetBtn2 = document.getElementById('resetBtn2');
   var clientGuestRows = document.getElementById('clientGuestRows');
@@ -2029,17 +2047,6 @@ if(typeof document !== 'undefined'){
     syncTypeLabels();
     if(generatedOnce) generate(); else renderSkeleton();
   });
-  pasteBtn.addEventListener('click', function(){
-    function ok(text){
-      text = (text || '').trim();
-      if(text){ fPdfUrl.value = text; setPdfStatus('已粘贴剪贴板内容', 'ok'); }
-      else setPdfStatus('剪贴板为空', 'err');
-    }
-    function fail(){ setPdfStatus('读取剪贴板失败：请长按输入框手动粘贴', 'err'); }
-    if(navigator.clipboard && navigator.clipboard.readText){
-      navigator.clipboard.readText().then(ok, fail);
-    }else fail();
-  });
   document.querySelector('.input-card').addEventListener('keydown', function(e){
     if(e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     if(e.target === fPdfUrl && fPdfUrl.value.trim()){ pdfBtn.click(); return; }   /* 网址框回车＝解析 PDF */
@@ -2182,7 +2189,23 @@ if(typeof document !== 'undefined'){
     pdfStatus.className = 'hint' + (kind ? ' ' + kind : '');
   }
 
+  /* 解析入口：未选本地文件时，先尝试自动粘贴剪贴板中的公告链接再解析；其他逻辑不变 */
   pdfBtn.addEventListener('click', function(){
+    var file = fPdfFile.files && fPdfFile.files[0];
+    if(file){ runParse(); return; }
+    if(navigator.clipboard && navigator.clipboard.readText){
+      navigator.clipboard.readText().then(function(text){
+        text = (text || '').trim();
+        if(text && text !== fPdfUrl.value.trim() && (/^https?:\/\//i.test(text) || /cninfo\.com\.cn/i.test(text))){
+          fPdfUrl.value = text;
+          setPdfStatus('已自动粘贴剪贴板中的公告链接', 'ok');
+        }
+        runParse();
+      }, runParse);
+    }else runParse();
+  });
+
+  function runParse(){
     var file = fPdfFile.files && fPdfFile.files[0];
     var rawUrl = fPdfUrl.value.trim();
     if(!file && !rawUrl){ setPdfStatus('请先粘贴公告网址或选择本地 PDF 文件', 'err'); return; }
@@ -2225,7 +2248,7 @@ if(typeof document !== 'undefined'){
     }).catch(function(err){
       setPdfStatus('解析失败：' + (err && err.message ? err.message : err), 'err');
     }).then(function(){ pdfBtn.disabled = false; });
-  });
+  }
 
   /* 初始：1 位主承销商嘉宾空行、标签同步 */
   addGuestRow(clientGuestRows);
