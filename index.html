@@ -162,7 +162,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 .print-table{width:100%;border-collapse:collapse;table-layout:fixed;white-space:normal}   /* fixed：列宽由容器定，窄屏不横向撑开；normal：覆盖全局 table nowrap */
 .print-table td{padding:0;border:none;text-align:left;vertical-align:top}   /* 覆盖全局 td 居中/边框样式 */
 @media print{
-  @page{margin:40pt 50pt}
+  @page{size:A4;margin:25mm}   /* 与 Word 一致：A4、2.5cm 页边距 */
   .page-header{font-size:10.5pt;background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
   .print-table.pb{page-break-before:always}   /* 摇号说法查阅表：新起一页（拆表方案，单元格内强制分页不稳，勿改回） */
 }
@@ -199,11 +199,10 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   body{background:#fff}
   .no-print{display:none !important}
   .container{max-width:none;padding:0}
-  .card{border:none;box-shadow:none;padding:0;margin:0 0 16px}
-  .script-doc{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .overview h2{font-size:12pt}
-  table{font-size:10pt}
-  .script-doc p{font-size:10.5pt;line-height:1.0;letter-spacing:.06em}
+  .card{border:none;box-shadow:none;padding:0;margin:0}
+  .script-doc{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;
+    font-family:"Microsoft YaHei","微软雅黑",sans-serif}   /* 打印版式严格对齐导出 Word */
+  .script-doc p{font-size:10.5pt;line-height:1.0;letter-spacing:.06em;margin:0 0 4pt}   /* 段后 4pt = Word w:after=80twips */
 }
 </style>
 </head>
@@ -294,7 +293,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 </section>
 
 <section id="outputArea" style="display:none">
-  <div class="card overview" id="overviewCard">
+  <div class="card overview no-print" id="overviewCard">
     <h2>中签率拆解总览表</h2>
     <div class="table-wrap"><table id="overviewTable"></table></div>
     <div class="note" id="overviewNote"></div>
@@ -1011,77 +1010,117 @@ function lastRoundParas(v, r, withGuide){
   if(withGuide){
     out.push([M('（指引：接下来确定该号码的最高位（倒数第 ' + D + ' 位）。把刚摇出的后 ' + (D - 1) +
       ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较，情形如下：）')]);
-    out.push([M('（1.大于时：使用号球范围 0～（首位数字−1）；若只剩一个选择，号码由电脑系统自动产生，按 A 项照屏幕念出。）')]);
+    out.push([M('（1.大于时：使用号球范围 0～（首位数字−1）；若只剩一个选择，号码由电脑系统自动产生，按 A 项照屏幕念出；有多个选择时，按 A 项由工作人员把相应号球放入 1 号机摇出。）')]);
     out.push([M('（2.小于或等于时：使用号球范围 0～' + v.firstDigit + '，按 B 项由工作人员放入 1 号机摇出。）')]);
     out.push([M('（3.多轮重复摇号时，前一次已摇出的号球须从号球范围中去掉，再以剩余号球摇出。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
   }
   out.push([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
-  out.push([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
-  out.push([G('（B、小于的情况下：'), B(' 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
-  out.push([R(balls.join(' 、 ') + ' 、 ')]);   /* 球号行顶格左对齐（与汉字行一致） */
-  /* 主持人对镜头再念一遍球号（数字汉字读法） */
-  var ballsCn = balls.map(function(b){ return CN_DIGITS[Number(b)]; });
-  out.push([R(ballsCn.join(' 、 ') + ' 、 ')]);
-  out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
-  out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), LV(lp + 'lead', 'num', 15, {N:1}), B('  '), G('）')]);
+  /* A：大于 → 号球 0～首位−1。只剩 1 个可选（首位为 1）时由电脑系统自动分配；
+     有多个可选时与 B 同样话术：号球放入 1 号机摇出（如配号首位 2 → 大于用 0、1 机摇） */
+  var ballsA = balls.slice(0, balls.length - 1);
+  function drawLeadLines(bList, leadLv){
+    var cn = bList.map(function(b){ return CN_DIGITS[Number(b)]; });
+    out.push([B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
+    out.push([R(bList.join(' 、 ') + ' 、 ')]);   /* 球号行顶格左对齐（与汉字行一致） */
+    out.push([R(cn.join(' 、 ') + ' 、 ')]);       /* 主持人对镜头再念一遍球号（数字汉字读法） */
+    out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
+    out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), leadLv, B('  '), G('）')]);
+  }
+  if(ballsA.length <= 1){
+    out.push([G('（A、大于的情况下：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
+  }else{
+    out.push([G('（A、大于的情况下：')]);
+    drawLeadLines(ballsA, LV(lp + 'leadA', 'num', 15, {N:1}));
+  }
+  out.push([G('（B、小于的情况下：')]);
+  drawLeadLines(balls, LV(lp + 'lead', 'num', 15, {N:1}));
   out.push([]);
   out.push([R('第'), LV(lp + '_idx2', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码已经产生，是'), LV(lp + 'final', 'num', 22, {N:D})]);
   out.push([]);
   return out;
 }
 
-/* 《摇号说法查阅表（临场应变参考）》：整段标准说法、数字留空；配色——主标题黑（带 pb 分页标记）、
-   "用法"与"附：最后一步选球常识"整块灰色、五段标题绿色斜体、正文黑色、正文括号内提示绿色斜体 */
+/* 《摇号说法查阅表（临场应变参考）》：整段标准说法、数字留空；配色标准——念出来的正文黑色、
+   不念出但需提醒注意的标绿括号斜体、指引性内容标灰（"用法"与"附：最后一步选球常识"整块灰）；
+   主标题黑（带 pb 分页标记：Word pageBreakBefore、打印拆表新起一页） */
 function lookupParas(){
-  return [
+  /* 摇号过程标准说辞块（以 8 位为例；机次位次按实际位数顺推，摇完即止） */
+  function lkPass(){
+    return [
+      [B('首先由 1、2、3号机 分别摇出 此组号码的 倒数第1、2、3位， 请开始摇号'), G('（留意摇号情况）')],
+      [B('号码已经产生，倒数第1位号码是____，倒数第2位号码是____，倒数第3位号码是____。')],
+      [B('下面由 1、2、3号机 分别摇出 此组号码的 倒数第4、5、6位， 请开始摇号'), G('（留意摇号情况）')],
+      [B('号码已经产生，倒数第4位号码是____，倒数第5位号码是____，倒数第6位号码是____。')],
+      [B('再由 1、2号机 分别摇出 此组号码的 倒数第7、8位， 请开始摇号'), G('（留意摇号情况）')],
+      [B('号码已经产生，倒数第7位号码是____，倒数第8位号码是____。')]
+    ];
+  }
+  var out = [
     [{t:'【摇号说法查阅表（临场应变参考）】', pb:true}],
-    [M('用法：现场情形与计划不一致时，找到对应情形的那一段，照着念，并把电脑屏幕上显示的数字填入空格。摇号顺序均为：先摇个位、再摇十位、再摇百位，每轮至多 3 台摇号机；位数更多时按同样方式继续。')],
+    [M('用法：现场情形与计划不一致时，找到对应情形的那一段，照着念，并把电脑屏幕上显示的数字填入空格。摇号顺序均为：先摇个位、再摇十位、再摇百位，每轮至多 3 台摇号机；位数更多时按同样方式继续，位数更少时摇完即止；机次与位次一切以电脑显示屏为准。')],
     [],
     [G('一、正常环节（只摇一个号码）')],
-    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [B('摇号过程：先摇个位、再摇十位、再摇百位，每轮至多 3 台机；位数更多时按同样方式继续')],
+    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')]
+  ];
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('二、正常环节（一个基本号码＋递增或递减出其余号码）')],
-    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
-    [B('摇号过程同上')],
+    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')]
+  );
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数 的基本中签号码已经产生，是____________ '), G('（根据显示屏读出）'), B(' 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('三、拆分环节（拆成两段分别摇）')],
     [B('下面我们摇出 ____ 分之 ____ 的中签号码，将 ____ 分之 ____ 拆分成 ____ 分之 ____ 和 ____ 分之 ____ 。')],
-    [B('首先我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')],
-    [B('摇号过程同上')],
+    [B('首先我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 作为基本中签号码，然后递增或递减 ____ ，得到另外 ____ 个中签号码。')]
+  );
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数 的基本中签号码已经产生，是____________ '), G('（根据显示屏读出）'), B(' 根据电脑程序计算显示，递增或递减 ____ ，得到另外 ____ 个中签号码是____________________________________________')],
-    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [B('摇号过程同上；若此段多于 1 个号码，说法同"二"')],
+    [B('下面我们摇出 ____ 分之 ____ 的中签号码，摇出一个 ____ 位数 的中签号码。')]
+  );
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('四、倒数第二步（剩余号码较多时重复此段）')],
-    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')],
-    [B('摇号过程同上')],
+    [B('下面我们摇出 ____ 分之 1 的中签号码，摇出一个 ____ 位数 的中签号码。')]
+  );
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数 的中签号码已经产生，是____________ '), G('（根据显示屏读出）')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [G('五、最后一步（逐个产生完整号码）')],
     [B('经计算，现在还有 ____ 个 ____ 位数的中签号码未产生。')],
-    [B('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')],
-    [B('摇号过程同上，先摇出后几位')],
+    [B('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')]
+  );
+  lkPass().forEach(function(p){ out.push(p); });
+  out.push(
     [B('____ 位数的后 ____ 位号码已经产生，是____________ '), G('（根据显示屏读出）')],
     [B('由于大于（小于） 配号总数的后 ____ 位数 ____________')],
-    [B('A、大于的情况下： 系统自动分配 倒数第 ____ 位号码为 _____ ')],
-    [B('B、小于的情况下： 请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')],
-    [B('____ 、')],
+    [G('（A、大于的情况下：使用号球 0～（首位数字减 1））')],
+    [G('（只剩一个可选号码时：由电脑系统自动分配，照屏幕念出）')],
+    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（对镜头用汉字再念一遍）')],
     [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
-    [B('倒数第 ____ 位号码已经产生，是_______________  ')],
+    [B('倒数第 ____ 位号码已经产生，是_______________')],
+    [G('（B、小于或等于的情况下：使用号球 0～首位数字）')],
+    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（对镜头用汉字再念一遍）')],
+    [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
+    [B('倒数第 ____ 位号码已经产生，是_______________')],
     [B('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')],
     [],
     [M('附：最后一步选球常识')],
     [M('比较后位数字与配号总数后位数字：大于时，号球从 0 放到（首位数字减 1）；小于或等于时，号球从 0 放到首位数字。只剩一个可选号码时由电脑自动分配；有多个可选号码时放入 1 号机摇出。已摇出的号球不再放回，下一轮从范围中去掉后再摇。')]
-  ];
+  );
+  return out;
 }
 
 /* 生成完整主持稿（段落数组，空数组 = 空行）；rounds = {p2: 倒数第二步轮数, last: 最后一步轮数} */
@@ -1846,7 +1885,7 @@ if(typeof document !== 'undefined'){
 
   /* 手工清空某字段后恢复自动同步 */
   function resyncField(id){
-    var m = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
+    var m = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|leadA|assign)$/);
     if(!m) return;
     var prefix = m[1], kind = m[2];
     if(kind === 'num' || kind === 'tail'){
@@ -1861,10 +1900,10 @@ if(typeof document !== 'undefined'){
     }
   }
 
-  /* 最后一步：尾数 + 最高位（A 分配位优先，否则 B 摇出位）→ 自动拼装最终号码 */
+  /* 最后一步：尾数 + 最高位（A 分配位/A 摇出位优先，否则 B 摇出位）→ 自动拼装最终号码 */
   function syncLastFinal(prefix){
     var tail = liveState.values[prefix + 'tail'];
-    var lead = liveState.values[prefix + 'assign'] || liveState.values[prefix + 'lead'];
+    var lead = liveState.values[prefix + 'assign'] || liveState.values[prefix + 'leadA'] || liveState.values[prefix + 'lead'];
     var fin = (tail && lead && /^\d$/.test(lead) && tail.length === liveV.D - 1) ? lead + tail : null;
     syncAuto(prefix + 'final', fin);
   }
@@ -1948,7 +1987,7 @@ if(typeof document !== 'undefined'){
       }
     }else{
       var val = el.value;
-      var m2 = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
+      var m2 = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|leadA|assign)$/);
       if(val.trim() === ''){
         delete liveState.values[id];
         delete liveState.pinned[id];
@@ -1961,7 +2000,7 @@ if(typeof document !== 'undefined'){
           var g = liveGroupMap[prefix];
           /* 手工填基本号时，B 型展开行同步自动计算（展开行未被钉住才同步） */
           if(kind === 'num' && g && g.m > 1) syncAuto(prefix + 'exp', expandB(val.trim(), g.interval, g.m, g.N).join(' '));
-          if(kind === 'tail' || kind === 'lead' || kind === 'assign') syncLastFinal(prefix);
+          if(kind === 'tail' || kind === 'lead' || kind === 'leadA' || kind === 'assign') syncLastFinal(prefix);
         }
       }
     }
