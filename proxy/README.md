@@ -11,8 +11,7 @@
    `share-script-pdf-proxy` → **部署**。
 3. 进入该 Worker → **编辑代码**（Edit code）→ 用本目录 `worker.js` 的**全部内容**替换编辑器里的默认代码 → **部署**。
 4. 你的 Worker 地址形如：`https://share-script-pdf-proxy.<你的子域>.workers.dev`。
-5. 打开主持稿生成器页面，在「自建代理地址（可选）」输入框填入该地址（不含路径、不含末尾 `/`），
-   页面会记住它，之后 URL 解析会优先走它。
+5. 本项目的 Worker 地址已内置在生成器代码中（自动应用，无需填写）；自用部署时替换 `index.html` 里的 `PDF_PROXY` 常量即可。
 
 ## 方式二：命令行部署（wrangler）
 
@@ -35,5 +34,8 @@ file /tmp/t.pdf   # 应显示 PDF document
 ## 安全说明
 
 - 仅允许 `https` 且主机在白名单（`static.cninfo.com.cn`、`www.cninfo.com.cn`、`webchat.cninfo.com.cn`），
-  其余请求一律 403，不会被当作开放代理滥用。
+  其余请求一律 403，不会被当作开放代理滥用。重定向不自动跟随：3xx 目标主机须重新过白名单（至多 3 次）。
+- 仅接受 GET/HEAD（其余 405）；浏览器端调用校验 Origin 白名单（本站域 + GitHub Pages + 本地开发），
+  无 Origin 的非浏览器请求（curl 等）放行。上游抓取限时 10 秒，防挂起。
+- 透传时剔除 `content-encoding` 与 `content-length`（Workers 会自动解压 gzip，防止字节数不符）。
 - 如需代理其他披露网站，把对应主机名加进 `worker.js` 的 `ALLOWED_HOSTS` 再重新部署即可。

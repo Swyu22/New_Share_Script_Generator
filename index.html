@@ -192,6 +192,8 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   th,td{padding:6px 8px}
   .script-doc{padding:18px 14px}
   .script-doc p{font-size:.92rem;line-height:2}
+  /* iOS Safari 对 <16px 输入框聚焦时强制放大页面：移动端输入框统一 16px 防缩放跳动 */
+  .input-card input,.input-card select,.script-doc .lv{font-size:16px}
   .actions{justify-content:stretch}
   .actions .btn{flex:1 1 100%}
 }
@@ -219,7 +221,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>仪式类型</legend>
     <div class="grid">
-      <div class="fld"><label>选择仪式类型（决定措辞与单位）</label>
+      <div class="fld"><label for="fType">选择仪式类型（决定措辞与单位）</label>
         <select id="fType">
           <option value="ipo">新股摇号抽签仪式</option>
           <option value="kzz">可转债发行摇号抽签仪式</option>
@@ -230,10 +232,10 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>从公告 PDF 自动填充（可选）</legend>
     <div class="grid">
-      <div class="fld"><label>公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label>
+      <div class="fld"><label for="fPdfUrl">公告 PDF 网址（支持巨潮微信阅读器链接，自动解码）</label>
         <div class="url-row"><input id="fPdfUrl" type="url" placeholder="如 webchat.cninfo.com.cn/pdf/?obj=…（点「解析 PDF 并填充」自动粘贴剪贴板链接）"></div>
       </div>
-      <div class="fld"><label>或选择本地 PDF 文件（优先于网址）</label><input id="fPdfFile" type="file" accept="application/pdf,.pdf"></div>
+      <div class="fld"><label for="fPdfFile">或选择本地 PDF 文件（优先于网址）</label><input id="fPdfFile" type="file" accept="application/pdf,.pdf"></div>
     </div>
     <div class="btn-row">
       <button class="btn ghost" id="pdfBtn" type="button">解析 PDF 并填充</button>
@@ -243,14 +245,14 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>公司与委托</legend>
     <div class="grid">
-      <div class="fld"><label>发行公司全称</label><input id="fCompany" type="text"></div>
-      <div class="fld"><label>委托（主承销商）全称</label><input id="fClient" type="text"></div>
+      <div class="fld"><label for="fCompany">发行公司全称</label><input id="fCompany" type="text"></div>
+      <div class="fld"><label for="fClient">委托（主承销商）全称</label><input id="fClient" type="text"></div>
     </div>
   </fieldset>
   <fieldset>
     <legend>嘉宾（主承销商）</legend>
     <div class="grid">
-      <div class="fld"><label>公司名称（嘉宾所属，留空＝同委托方）</label><input id="fClientGuestCo" type="text"></div>
+      <div class="fld"><label for="fClientGuestCo">公司名称（嘉宾所属，留空＝同委托方）</label><input id="fClientGuestCo" type="text"></div>
     </div>
     <div id="clientGuestRows"></div>
     <button class="btn ghost btn-sm" id="addClientGuest" type="button">＋ 增加主承销商嘉宾</button>
@@ -259,7 +261,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>嘉宾（发行人，可选）</legend>
     <div class="grid">
-      <div class="fld"><label>公司名称（留空＝同发行公司）</label><input id="fIssuerGuestCo" type="text"></div>
+      <div class="fld"><label for="fIssuerGuestCo">公司名称（留空＝同发行公司）</label><input id="fIssuerGuestCo" type="text"></div>
     </div>
     <div id="issuerGuestRows"></div>
     <button class="btn ghost btn-sm" id="addIssuerGuest" type="button">＋ 增加发行人嘉宾</button>
@@ -268,20 +270,20 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <fieldset>
     <legend>公证</legend>
     <div class="grid">
-      <div class="fld"><label>公证处名称（留空则留白）</label><input id="fOffice" type="text" value="广东省深圳市罗湖公证处"></div>
-      <div class="fld"><label>公证员 1（可空，留空则留白）</label><input id="fNotary1" type="text"></div>
-      <div class="fld"><label>公证员 2（可空，留空则留白）</label><input id="fNotary2" type="text"></div>
+      <div class="fld"><label for="fOffice">公证处名称（留空则留白）</label><input id="fOffice" type="text" value="广东省深圳市罗湖公证处"></div>
+      <div class="fld"><label for="fNotary1">公证员（可空，留空则留白）</label><input id="fNotary1" type="text"></div>
+      <div class="fld"><label for="fNotary2">公证人员（可空，留空则留白）</label><input id="fNotary2" type="text"></div>
     </div>
   </fieldset>
   <fieldset>
     <legend>发行数据与中签率</legend>
     <div class="grid">
-      <div class="fld"><label id="lblIssue">网上定价发行量（股）</label><input id="fIssue" type="text" inputmode="numeric"></div>
-      <div class="fld"><label id="lblShares">每 N 股确定一个申购号</label><input id="fShares" type="text" inputmode="numeric"></div>
-      <div class="fld"><label>申购配号总数</label><input id="fTotal" type="text" inputmode="numeric"></div>
-      <div class="fld"><label>号码中签数（留空自动＝发行量÷每号股数）</label><input id="fWinCount" type="text" inputmode="numeric" placeholder="留空自动计算"></div>
-      <div class="fld"><label>配号区间上限（留空自动）</label><input id="fRange" type="text" placeholder="留空自动生成"></div>
-      <div class="fld"><label>中签率（%，最小到万亿分之一）</label><input id="fRate" type="text" inputmode="decimal"></div>
+      <div class="fld"><label id="lblIssue" for="fIssue">网上定价发行量（股）</label><input id="fIssue" type="text" inputmode="numeric"></div>
+      <div class="fld"><label id="lblShares" for="fShares">每 N 股确定一个申购号</label><input id="fShares" type="text" inputmode="numeric"></div>
+      <div class="fld"><label for="fTotal">申购配号总数</label><input id="fTotal" type="text" inputmode="numeric"></div>
+      <div class="fld"><label for="fWinCount">号码中签数（留空自动＝发行量÷每号股数）</label><input id="fWinCount" type="text" inputmode="numeric" placeholder="留空自动计算"></div>
+      <div class="fld"><label for="fRange">配号区间上限（留空自动）</label><input id="fRange" type="text" placeholder="留空自动生成"></div>
+      <div class="fld"><label for="fRate">中签率（%，最小到万亿分之一）</label><input id="fRate" type="text" inputmode="decimal"></div>
     </div>
   </fieldset>
   <div class="btn-row">
@@ -343,11 +345,13 @@ function numToChinese(n){
   var sections = [];
   var x = n;
   while(x > 0){ sections.push(x % 10000); x = Math.floor(x / 10000); }
-  var result = '';
+  var result = '', needZero = false;
   for(var i = sections.length - 1; i >= 0; i--){
     var sec = sections[i];
-    if(sec === 0) continue;
-    if(result !== '' && sec < 1000) result += '零';
+    /* 整节为 0：高位已有输出时置补零标记（如 100001000 → 一亿零一千，不能丢零） */
+    if(sec === 0){ if(result !== '') needZero = true; continue; }
+    if(result !== '' && (sec < 1000 || needZero) && result.slice(-1) !== '零') result += '零';
+    needZero = false;
     var s = String(sec), t = '';
     for(var j = 0; j < s.length; j++){
       var d = s.charCodeAt(j) - 48;
@@ -482,6 +486,7 @@ function assembleNumber(prefix, N, values){
 /* B 型展开：基本号 x 起，模 10^N 环上按 interval 等距取另外 m-1 个（不含基本号），
    补零到 N 位并按由小到大排序展示 */
 function expandB(xStr, interval, m, N){
+  if(!/^\d+$/.test(xStr)) return [];   /* 垃圾输入不产出 "0NaN"（由 checkNums 另行报错） */
   var x = Number(xStr), mod = Math.pow(10, N), out = [];
   for(var k = 1; k < m; k++){
     var y = (x + k * interval) % mod;
@@ -530,7 +535,7 @@ function computeLive(v, st){
   var firstDigit = Number(v.firstDigit);
   var produced = [], rows = [], used = 0;
 
-  function checkNums(g, numStrs, label){
+  function checkNums(g, numStrs){
     var xs = [];
     for(var i = 0; i < numStrs.length; i++){
       var s = numStrs[i];
@@ -539,6 +544,10 @@ function computeLive(v, st){
       xs.push(Number(s));
     }
     for(var j = 0; j < xs.length; j++){
+      /* 同组内部重复（基本号与展开号抄重等）：此前只查跨环节重复，同组恰满个数时会静默多计 */
+      for(var k = j + 1; k < xs.length; k++){
+        if(xs[j] === xs[k]) return {error:'本组号码自相重复（' + ('000000000000' + xs[j]).slice(-g.N) + '），请核对'};
+      }
       var bad = collideAny(xs[j], g.N, produced);
       if(bad) return {error:'与先前中签号码重复（' + ('000000000000' + bad.x).slice(-bad.N) + '），本轮无效需重摇'};
     }
@@ -560,7 +569,7 @@ function computeLive(v, st){
       if(!exp){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:base + '（另 ' + (g.m - 1) + ' 个未填）', add:'', status:'展开号码未填'}); return; }
       list = list.concat(exp.split(/[\s、，,；;]+/).filter(function(s){ return s !== ''; }));
     }
-    var r = checkNums(g, list, g.label);
+    var r = checkNums(g, list);
     if(r.error){ rows.push({id:g.id + 'num', label:g.label, N:g.N, nums:list.slice().sort().join(' '), add:'', status:r.error, bad:true}); return; }
     /* 展开个数应为 m（基本号 + 另外 m-1 个）：个数不符时软警示（仍按实填计入，供人工核对） */
     var cntWarn = list.length !== g.m ? '号码个数应为 ' + g.m + ' 个（基本号＋另外 ' + (g.m - 1) + ' 个），当前 ' + list.length + ' 个，请核对' : null;
@@ -574,7 +583,7 @@ function computeLive(v, st){
   for(var r2 = 1; r2 <= (st.p2Rounds || 1); r2++){
     var n2 = (st.values['p2_' + r2 + 'num'] || '').trim();
     if(!n2){ rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:'', add:'', status:''}); continue; }
-    var rr = checkNums({N:maxN}, [n2], '倒数第二步');
+    var rr = checkNums({N:maxN}, [n2]);
     if(rr.error){ rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:n2, add:'', status:rr.error, bad:true}); continue; }
     used += rr.add;
     rows.push({id:'p2_' + r2 + 'num', label:'倒数第二步·第' + r2 + '轮', N:maxN, nums:n2, each:String(coverCount(Number(n2), maxN, total)), add:rr.add, status:rr.warn || '有效', warn:!!rr.warn});
@@ -698,7 +707,6 @@ function parseAnnouncement(rawText){
      捕获含"特别提示/公告"等杂质的视为误捕继续下一条 */
   var CLIENT_RULES = [
     /(?:联席)?保荐人[（(](?:联席)?主承销商[）)][：:]([^，。；：、]{4,50}?(?:股份有限公司|有限责任公司|股份公司|有限公司))/,
-    /保荐人[（(]主承销商[）)][：:]([^，。；：、]{4,50}?(?:股份有限公司|有限责任公司|股份公司|有限公司))/,
     /主承销商[：:]([^，。；：、]{4,50}?(?:股份有限公司|有限责任公司|股份公司|有限公司))/,
     /(?:和|与|及)?([^，。；：、]{4,50}?(?:股份有限公司|有限责任公司|股份公司|有限公司))（以下简称["“]?保荐人[（(]主承销商[）)]/
   ];
@@ -842,7 +850,7 @@ function prepareData(raw){
   v.issuerGuests = ig;
   v.guests = ig.concat(cg);   /* 环节分配顺序：环节1→发行人嘉宾，其后主承销商嘉宾 */
 
-  if(!/^\d+$/.test((raw.issue || '').trim()) || Number(raw.issue) <= 0) return fail('网上定价发行量须为正整数');
+  if(!/^\d+$/.test((raw.issue || '').trim()) || Number(raw.issue) <= 0 || (raw.issue || '').trim().length > 12) return fail('网上定价发行量须为 1～12 位正整数');
   if(!/^\d+$/.test((raw.shares || '').trim()) || Number(raw.shares) <= 0) return fail('每号股数须为正整数');
   v.issue = (raw.issue || '').trim().replace(/^0+/, '') || '0';
   v.shares = (raw.shares || '').trim().replace(/^0+/, '') || '0';
@@ -859,7 +867,7 @@ function prepareData(raw){
 
   var wc = (raw.winCount || '').trim();
   if(wc){
-    if(!/^\d+$/.test(wc) || Number(wc) <= 0) return fail('号码中签数须为正整数（或留空自动计算）');
+    if(!/^\d+$/.test(wc) || Number(wc) <= 0 || wc.length > 12) return fail('号码中签数须为 1～12 位正整数（或留空自动计算）');
     v.winCount = wc.replace(/^0+/, '');
     v.winAuto = false;
   }else{
@@ -874,7 +882,7 @@ function prepareData(raw){
     v.rangeUpper = rg;
   }else{
     var p12 = ('000000000000' + v.total).slice(-12);
-    v.rangeUpper = p12.slice(0, 4) + ',' + p12.slice(4, 8) + ',' + p12.slice(8, 12);
+    v.rangeUpper = p12.slice(0, 4) + '，' + p12.slice(4, 8) + '，' + p12.slice(8, 12);   /* 与 rangeLower 统一全角逗号 */
   }
 
   var pr = parsePercent(raw.rate);
@@ -896,7 +904,7 @@ function numberSteps(shown){
     if(st.type === 'C'){ labels.push(k + '——A / ' + (k + 1) + '——B'); k += 2; }
     else{ labels.push(String(k)); k += 1; }
   });
-  return {labels:labels, total:k - 1};
+  return {labels:labels};
 }
 
 /* ============ 文档构建（段落 = run 数组；run={t:文本, c:'r'红|'g'绿|无}） ============ */
@@ -1548,10 +1556,10 @@ function docToDocxBlob(doc, resolve, headerTotal){
     return '<w:sectPr><w:headerReference w:type="default" r:id="' + rid + '"/><w:pgSz w:w="11906" w:h="16838"/>' +
       '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>';
   };
-  var inLookup = false;
+  var inLookup = false, hasLookup = false;
   var paras = doc.map(function(p, idx){
     if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
-    if(p.some(function(r){ return r.pb; })) inLookup = true;   /* 查阅表起改小五 */
+    if(p.some(function(r){ return r.pb; })){ inLookup = true; hasLookup = true; }   /* 查阅表起改小五 */
     /* 下一段为查阅表首段时，本段末尾插入分节符（新节页眉不含配号总数，分页由分节符承担） */
     var nextPb = idx + 1 < doc.length && doc[idx + 1].some(function(r){ return r.pb; });
     return '<w:p><w:pPr><w:spacing w:after="80" w:line="240" w:lineRule="auto"/>' + (nextPb ? sectPr('rId2') : '') + '</w:pPr>' +
@@ -1561,7 +1569,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' +
     paras +
-    sectPr('rId3') + '</w:body></w:document>';
+    sectPr(hasLookup ? 'rId3' : 'rId2') + '</w:body></w:document>';   /* 无查阅表（骨架稿）时全文用 header1 */
   var contentTypes =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -1701,10 +1709,10 @@ if(typeof document !== 'undefined'){
   function addGuestRow(container, g){
     var row = document.createElement('div');
     row.className = 'guest-row';
-    row.innerHTML = '<input type="text" class="g-title" placeholder="职务（可空）">' +
-      '<input type="text" class="g-name" placeholder="姓名">' +
-      '<select class="g-honor"><option>先生</option><option>女士</option></select>' +
-      '<button class="btn ghost btn-del" type="button" title="删除该嘉宾">×</button>';
+    row.innerHTML = '<input type="text" class="g-title" placeholder="职务（可空）" aria-label="嘉宾职务（可空）">' +
+      '<input type="text" class="g-name" placeholder="姓名" aria-label="嘉宾姓名">' +
+      '<select class="g-honor" aria-label="嘉宾称谓"><option>先生</option><option>女士</option></select>' +
+      '<button class="btn ghost btn-del" type="button" title="删除该嘉宾" aria-label="删除该嘉宾">×</button>';
     row.querySelector('.g-title').value = (g && g.title) || '';
     row.querySelector('.g-name').value = (g && g.name) || '';
     row.querySelector('.g-honor').value = (g && g.honor) || '先生';
@@ -1823,7 +1831,7 @@ if(typeof document !== 'undefined'){
     overviewCard.style.display = 'none';
     liveCard.style.display = 'none';
     liveV = null; liveState = null; liveDoc = null;
-    scriptDoc.innerHTML = docToPreviewHtml(doc);
+    scriptDoc.innerHTML = scriptTablesHtml('________', doc, null);
     outputArea.style.display = '';
   }
 
@@ -1870,13 +1878,19 @@ if(typeof document !== 'undefined'){
     for(r = 1; r <= liveState.lastRounds; r++) liveGroupMap['last_' + r] = {N:liveV.D - 1, m:1, interval:0};
   }
 
+  /* 是否已填写任何摇号数据（ball 球组文本位不算） */
+  function liveTouched(){
+    if(!liveState) return false;
+    return Object.keys(liveState.values).some(function(k){ return k.indexOf('ball') !== 0; });
+  }
+
   /* 导出/渲染共用的值解析器：comp 取计算缓存，其余取已填值 */
   function resolveLiveRun(live){
     if(!liveState) return '';
     if(live.kind === 'comp'){
       if(live.r) return String(live.r);
       if(live.id === 'remainingEcho'){
-        if(!Object.keys(liveState.values).length) return '';
+        if(!liveTouched()) return '';
         var cache = liveState.cache || computeLive(liveV, liveState);   /* 优先用 updateLive 的缓存 */
         return String(cache.remaining);
       }
@@ -1901,6 +1915,12 @@ if(typeof document !== 'undefined'){
     if(kind === 'num' || kind === 'tail'){
       var d1 = liveIndex[prefix + 'd1'];
       if(d1) syncAuto(id, assembleNumber(prefix, d1.N, liveState.values));
+      /* 基本号被清空重算后，展开行同步重算（防 num 与 exp 不一致） */
+      if(kind === 'num'){
+        var g0 = liveGroupMap[prefix];
+        var base0 = liveState.values[prefix + 'num'];
+        syncAuto(prefix + 'exp', (g0 && g0.m > 1 && base0) ? expandB(base0, g0.interval, g0.m, g0.N).join(' ') : null);
+      }
     }else if(kind === 'exp'){
       var g = liveGroupMap[prefix];
       var base = liveState.values[prefix + 'num'];
@@ -1908,6 +1928,8 @@ if(typeof document !== 'undefined'){
     }else if(kind === 'final'){
       syncLastFinal(prefix);
     }
+    /* 尾数/最高位被清空时，同步重算最终号码（避免残留旧值） */
+    if(kind === 'tail' || kind === 'lead' || kind === 'leadA' || kind === 'assign') syncLastFinal(prefix);
   }
 
   /* 最后一步：尾数 + 最高位（A 分配位/A 摇出位优先，否则 B 摇出位）→ 自动拼装最终号码 */
@@ -1933,7 +1955,7 @@ if(typeof document !== 'undefined'){
   }
 
   function renderLiveStatus(cache){
-    var touched = liveState && Object.keys(liveState.values).length > 0;
+    var touched = liveTouched();
     var dText = !touched ? '<span style="color:var(--muted)">填写摇号数字后自动判定当前步骤</span>'
       : cache.decision === 'end' ? '<span class="st-end">摇号结束，直接念结束语</span>'
       : cache.decision === 'last' ? '<span class="st-last">剩余 ≤ 首位数字 ' + liveV.firstDigit + ' → 进入最后一步</span>'
@@ -2167,12 +2189,17 @@ if(typeof document !== 'undefined'){
     var attempts = [PDF_PROXY.replace(/\/+$/, '') + '/?url=' + encodeURIComponent(url), url];
     PDF_PROXIES.forEach(function(f){ attempts.push(f(url)); });
     var i = 0;
+    function timedFetch(u, ms){
+      /* 每次尝试限时，防单个代理挂起拖死整个抓取 */
+      if(typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return fetch(u, {signal: AbortSignal.timeout(ms)});
+      return Promise.race([fetch(u), new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, ms); })]);
+    }
     function next(){
       if(i >= attempts.length){
         return Promise.reject(new Error('无法抓取该 PDF：目标网站不允许跨域访问，公共代理也不可用。请先在浏览器中打开该链接、把 PDF 保存到本地（或转发到电脑），再改用「选择本地 PDF 文件」解析。'));
       }
       var u = attempts[i++];
-      return fetch(u).then(function(resp){
+      return timedFetch(u, 15000).then(function(resp){
         if(!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp.arrayBuffer();
       }).then(function(buf){
@@ -2189,10 +2216,13 @@ if(typeof document !== 'undefined'){
     pdfStatus.className = 'hint' + (kind ? ' ' + kind : '');
   }
 
-  /* 解析入口：未选本地文件时，先尝试自动粘贴剪贴板中的公告链接再解析；其他逻辑不变 */
+  /* 解析入口：未选本地文件且网址框为空时，先尝试自动粘贴剪贴板中的公告链接再解析（不覆盖已填内容）；其他逻辑不变 */
   pdfBtn.addEventListener('click', function(){
+    if(pdfBtn.disabled) return;   /* 剪贴板读取窗口期防双入 */
+    pdfBtn.disabled = true;
     var file = fPdfFile.files && fPdfFile.files[0];
     if(file){ runParse(); return; }
+    if(fPdfUrl.value.trim()){ runParse(); return; }
     if(navigator.clipboard && navigator.clipboard.readText){
       navigator.clipboard.readText().then(function(text){
         text = (text || '').trim();
@@ -2208,8 +2238,7 @@ if(typeof document !== 'undefined'){
   function runParse(){
     var file = fPdfFile.files && fPdfFile.files[0];
     var rawUrl = fPdfUrl.value.trim();
-    if(!file && !rawUrl){ setPdfStatus('请先粘贴公告网址或选择本地 PDF 文件', 'err'); return; }
-    pdfBtn.disabled = true;
+    if(!file && !rawUrl){ setPdfStatus('请先粘贴公告网址或选择本地 PDF 文件', 'err'); pdfBtn.disabled = false; return; }
     setPdfStatus('正在加载 PDF 解析组件…');
     loadPdfJs().then(function(){
       if(file){
