@@ -274,8 +274,8 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
     <legend>公证</legend>
     <div class="grid">
       <div class="fld"><label for="fOffice">公证处名称（留空则留白）</label><input id="fOffice" type="text" value="广东省深圳市罗湖公证处"></div>
-      <div class="fld"><label for="fNotary1">公证员（可空，留空则留白）</label><input id="fNotary1" type="text"></div>
-      <div class="fld"><label for="fNotary2">公证人员（可空，留空则留白）</label><input id="fNotary2" type="text"></div>
+      <div class="fld"><label for="fNotary1">公证员（留空则以字母代替）</label><input id="fNotary1" type="text"></div>
+      <div class="fld"><label for="fNotary2">公证人员（留空则以字母代替）</label><input id="fNotary2" type="text"></div>
     </div>
   </fieldset>
   <fieldset>
@@ -811,37 +811,41 @@ function prepareData(raw){
   v.notary2 = (raw.notary2 || '').trim();
   if(!v.company) return fail('请填写发行公司全称');
   if(!v.client) return fail('请填写委托（主承销商）全称');
-  /* 公证处/公证员可留空：主持稿对应位置留白（下划线）供现场填写 */
+  /* 公证处可留空：主持稿对应位置留白（下划线）供现场填写；
+     公证员/公证人员空缺时在后文以字母代替（见下方 letter 逻辑） */
   v.office = v.office || '________';
-  v.notary1 = v.notary1 || '________';
-  v.notary2 = v.notary2 || '________';
 
   v.type = raw.type === 'kzz' ? 'kzz' : 'ipo';
   v.unit = v.type === 'kzz' ? '张' : '股';
   v.kindInline = v.type === 'kzz' ? '可转债发行' : '新股发行';
   v.kindAnnoun = v.type === 'kzz' ? '债券发行' : '新股发行';
 
-  /* 嘉宾：主承销商组（≥1 人）+ 发行人组（可为 0 人）；全空行忽略，有内容但缺姓名则报错 */
-  function parseGuests(rows, label){
+  /* 嘉宾：主承销商组 + 发行人组（均可为 0 人）；全空行忽略；姓名可空缺（正文以字母代替） */
+  function parseGuests(rows){
     var out = [];
     for(var i = 0; i < rows.length; i++){
       var title = (rows[i].title || '').trim(), name = (rows[i].name || '').trim();
       if(!title && !name) continue;
-      if(!name) return '请填写' + label + '第 ' + (i + 1) + ' 位嘉宾的姓名（或删除该行）';
       out.push({title:title, name:name, honor:rows[i].honor || '先生'});
     }
     return out;
   }
-  var cg = parseGuests(raw.clientGuests || [], '主承销商');
-  if(typeof cg === 'string') return fail(cg);
+  var cg = parseGuests(raw.clientGuests || []);
   /* 主承销商嘉宾可为 0 人：介绍段不出现，摇号环节不安排嘉宾 */
-  var ig = parseGuests(raw.issuerGuests || [], '发行人');
-  if(typeof ig === 'string') return fail(ig);
+  var ig = parseGuests(raw.issuerGuests || []);
   v.clientGuestCo = (raw.clientGuestCo || '').trim() || v.client;
   v.issuerGuestCo = (raw.issuerGuestCo || '').trim() || v.company;
   v.clientGuests = cg;
   v.issuerGuests = ig;
   v.guests = ig.concat(cg);   /* 环节分配顺序：环节1→发行人嘉宾，其后主承销商嘉宾 */
+
+  /* 人名空缺者按出场顺序以 A、B、C… 代替：发行人嘉宾 → 主承销商嘉宾 → 公证员 → 公证人员 */
+  var letterN = 0;
+  function letter(){ return String.fromCharCode(65 + (letterN++ % 26)); }
+  ig.forEach(function(g){ if(!g.name) g.name = letter(); });
+  cg.forEach(function(g){ if(!g.name) g.name = letter(); });
+  if(!v.notary1) v.notary1 = letter();
+  if(!v.notary2) v.notary2 = letter();
 
   if(!/^\d+$/.test((raw.issue || '').trim()) || Number(raw.issue) <= 0 || (raw.issue || '').trim().length > 12) return fail('网上定价发行量须为 1～12 位正整数');
   if(!/^\d+$/.test((raw.shares || '').trim()) || Number(raw.shares) <= 0) return fail('每号股数须为正整数');
@@ -1102,7 +1106,7 @@ function lookupParas(){
   ]).forEach(function(p){ out.push(p); });
   out.push([]);
   boxed([
-    [G('五、最后一步（逐个产生完整号码）')],
+    [G('四、最后一步（逐个产生完整号码）')],
     [B('经计算，现在还有 ____ 个 ____ 位数的中签号码未产生。')],
     [B('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')],
     [G('（此处进入通用摇号环节）')],
@@ -1200,6 +1204,18 @@ function buildDocument(v, rounds){
 
   /* ---- 摇号环节 ---- */
   var K = 0;
+  /* 各环节蓝框：openBox 起一个新框（自动关闭上一个），closeBox 收尾（尾部空行留在框外） */
+  var boxStart = -1;
+  function closeBox(){
+    if(boxStart < 0) return;
+    var end = doc.length - 1;
+    while(end > boxStart && doc[end].length === 0) end--;
+    for(var i = boxStart; i <= end; i++){
+      doc[i].box = i === boxStart && i === end ? 'solo' : i === boxStart ? 's' : i === end ? 'e' : 'm';
+    }
+    boxStart = -1;
+  }
+  function openBox(){ closeBox(); boxStart = doc.length; }
   function guestAt(num){   /* 环节编号 → 第 num 位嘉宾（先发行人后主承销商）；超出则不安排 */
     if(num > v.guests.length) return null;
     var g = v.guests[num - 1];
@@ -1207,6 +1223,7 @@ function buildDocument(v, rounds){
     return {client:co, title:g.title, name:g.name, honor:g.honor};
   }
   v.shown.forEach(function(st){
+    openBox();
     if(st.type === 'C'){
       var a = st.parts[0], b = st.parts[1];
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——A')]);
@@ -1235,6 +1252,7 @@ function buildDocument(v, rounds){
   /* ---- 倒数第二步（可多轮，rounds.p2） ---- */
   var maxN = v.maxN;
   var dnMax = DENOM_NAMES[maxN];
+  openBox();
   P([G(K + 1 + ' 、倒数第二步')]);
   for(var r2 = 1; r2 <= rounds.p2; r2++){
     P([B('下面我们摇出 '), R(dnMax + ' 分之  1'), B(' 的中签号码，'),
@@ -1249,6 +1267,7 @@ function buildDocument(v, rounds){
 
   /* ---- 最后一步（可多轮，rounds.last） ---- */
   var D = v.D;
+  openBox();
   P([G(K + 2 + ' 、最后一步')]);
   P([R('经计算，现在还有 '), LV('remainingEcho', 'comp', 4), R(' 个 ' + D + ' 位数的中签号码未产生。')]);
   for(var rl = 1; rl <= rounds.last; rl++){
@@ -1261,11 +1280,13 @@ function buildDocument(v, rounds){
   BLANK();
 
   /* ---- 结束语 ---- */
+  openBox();
   P([G(K + 3 + ' 、结束语')]);
   P([B('本次摇号的  中签号码  已全部产生。')]);
   P([B('下面有请公证员就本次摇号结果致公证词。'), G('（公证员上台致词）')]);
   P([B('谢谢公证员！')]);
   P([B('各位嘉宾，' + v.company + ' '), R(v.kindInline), B(' 摇号抽签仪式 到此圆满结束，谢谢！')]);
+  closeBox();
   BLANK();
   BLANK();
   P([B('下面有请嘉宾上台拍照留念！')]);
@@ -1708,7 +1729,7 @@ if(typeof document !== 'undefined'){
     var row = document.createElement('div');
     row.className = 'guest-row';
     row.innerHTML = '<input type="text" class="g-title" placeholder="职务（可空）" aria-label="嘉宾职务（可空）">' +
-      '<input type="text" class="g-name" placeholder="姓名" aria-label="嘉宾姓名">' +
+      '<input type="text" class="g-name" placeholder="姓名（留空以字母代替）" aria-label="嘉宾姓名（留空以字母代替）">' +
       '<select class="g-honor" aria-label="嘉宾称谓"><option>先生</option><option>女士</option></select>' +
       '<button class="btn ghost btn-del" type="button" title="删除该嘉宾" aria-label="删除该嘉宾">×</button>';
     row.querySelector('.g-title').value = (g && g.title) || '';
