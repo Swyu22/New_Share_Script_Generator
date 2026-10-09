@@ -162,10 +162,17 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 .print-table td{padding:0;border:none;text-align:left;vertical-align:top}   /* 覆盖全局 td 居中/边框样式 */
 .print-table.pb tbody p{font-size:.9rem}   /* 查阅表：小五（屏幕按比例缩小） */
 /* 查阅表各环节蓝框分节（预览与打印一致；Word 侧用段落边框合并实现） */
-.lk-box{border:1.5px solid #2563eb;border-radius:6px;padding:6px 12px;margin:10px 0;page-break-inside:avoid}
+.lk-box{border:1.5px solid #2563eb;border-radius:6px;padding:6px 12px;margin:10px 0}
+/* 页底固定查阅表卡片 */
+.lookup-card{margin-top:22px}
+.lookup-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.lookup-head h2{font-size:1.05rem}
+/* 页眉速查表两行（加千亿/万亿后较长）：打印与 Word 用小五 9pt 保证两行排完 */
+.page-header .cheat{font-size:.98rem}
 @media print{
   @page{size:A4;margin:25mm}   /* 与 Word 一致：A4、2.5cm 页边距 */
   .page-header{font-size:10.5pt;background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
+  .page-header .cheat{font-size:9pt}
   .print-table.pb{page-break-before:always}   /* 摇号说法查阅表：新起一页（拆表方案，单元格内强制分页不稳，勿改回） */
   .print-table.pb tbody p{font-size:9pt}   /* 查阅表：小五（与 Word sz 18 一致） */
   .lk-box{margin:8pt 0}
@@ -319,6 +326,15 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <div class="hint wx-hint no-print" id="wxHint" style="display:none"></div>
 </section>
 
+<!-- 摇号说法查阅表：固定模板（不随主持稿导出），页面底部常驻，可单独导出 Word -->
+<section class="card script-doc lookup-card no-print" id="lookupCard">
+  <div class="lookup-head no-print">
+    <h2>摇号说法查阅表<span class="muted-sm">（临场应变参考 · 固定模板，不包含在主持稿导出中）</span></h2>
+    <button class="btn ghost btn-sm" id="lookupDocxBtn" type="button">导出查阅表 Word（.docx）</button>
+  </div>
+  <div id="lookupDoc"></div>
+</section>
+
 <div class="wx-mask no-print" id="wxMask" style="display:none">
   <div class="card wx-tip">
     <h3>微信内无法直接导出文件</h3>
@@ -340,8 +356,9 @@ var CN_DIGITS = ['零','一','二','三','四','五','六','七','八','九'];
 var DENOM_NAMES = {3:'千', 4:'万', 5:'十万', 6:'百万', 7:'千万', 8:'亿', 9:'十亿', 10:'百亿', 11:'千亿', 12:'万亿'};
 var SPLIT_MAP = {3:[2,1], 6:[5,1], 7:[5,2], 9:[5,4]};
 
-/* 数字读法（分节式）：每 4 位一节，节内阿拉伯数字、节间以 万亿/亿/万 单位加分隔；
-   中间整节为 0 跳过，非首节补足 4 位。例：9872478779→98亿 7247万 8779；24496500→2449万 6500；500→500 */
+/* 数字读法（逐位带单位式）：按 万亿/亿/万 分节，节内非零位写"阿拉伯数字+单位"（十位用"拾"），
+   零位写裸 0、连续零位并为一个、节尾零位省略、全零节整节略去；节间无空格。
+   例：1723320→1百7拾2万3千3百2拾；10200384230→1百02亿03拾8万4千2百3拾 */
 function numToHanzi(n){
   var s = String(n).replace(/\D/g, '').replace(/^0+/, '');
   if(!s) return '0';
@@ -349,14 +366,20 @@ function numToHanzi(n){
   while(s.length > 4){ secs.unshift(s.slice(-4)); s = s.slice(0, -4); }
   secs.unshift(s);
   var units = ['', '万', '亿', '万亿'];
-  var out = [];
+  var placeUnits = ['', '拾', '百', '千'];   /* 个位无单位 */
+  var out = '';
   for(var i = 0; i < secs.length; i++){
-    var v = Number(secs[i]);
-    if(v === 0) continue;
     var u = units[secs.length - 1 - i] || '';
-    out.push((out.length ? ('0000' + v).slice(-4) : String(v)) + u);
+    var str = i === 0 ? secs[0] : ('000' + secs[i]).slice(-4);   /* 首节按原样，其余节补零到 4 位 */
+    var t = '';
+    for(var j = 0; j < str.length; j++){
+      var d = str.charCodeAt(j) - 48;
+      t += d === 0 ? '0' : d + placeUnits[str.length - 1 - j];
+    }
+    t = t.replace(/0{2,}/g, '0').replace(/0+$/, '');   /* 连续零位并为一个、节尾零位省略 */
+    if(t) out += t + u;
   }
-  return out.join(' ');
+  return out;
 }
 
 /* 中签率逐位读法：0.0181348368 → 零点零壹 八壹三四 八三六八（前2位+每4位分节） */
@@ -1051,8 +1074,8 @@ function lastRoundParas(v, r, withGuide){
 
 /* 《摇号说法查阅表（临场应变参考）》：整段标准说法、数字留空；配色标准——念出来的正文黑色、
    不念出但需提醒注意的标绿括号斜体、指引性内容标灰（"用法"整块灰）；
-   主标题黑（带 pb 分页标记：Word pageBreakBefore、打印拆表新起一页）；
-   摇号过程 1～9 位通用说辞在最前展示一次，各环节不再重复，仅以绿斜体（此处进入通用摇号环节）指引 */
+   固定模板：页面底部常驻、可单独导出（不随主持稿导出；导出时小五字、页眉仅速查表）；
+   主标题黑（pb 标记：导出 docx 时标记小五段起点）；摇号过程 1～9 位通用说辞在最前展示一次 */
 function lookupParas(){
   /* 通用摇号环节标准说辞（1～9 位完整；机次位次照电脑屏幕顺推，摇完即止） */
   function lkPass(){
@@ -1294,10 +1317,6 @@ function buildDocument(v, rounds){
   BLANK();
   P([B('下面有请嘉宾上台拍照留念！')]);
 
-  /* ---- 附：摇号说法查阅表（临场应变参考） ---- */
-  BLANK();
-  lookupParas().forEach(function(p){ P(p); });
-
   return doc;
 }
 
@@ -1414,8 +1433,8 @@ function pageHeaderHtml(total){
     totalLine = '<div class="v">配号总数：' + totalHtml + '</div>';
   }
   return '<div class="page-header">' +
-    '<div>末位尾数：1→十分之&nbsp;&nbsp;2→百分之&nbsp;&nbsp;3→千分之&nbsp;&nbsp;4→万分之&nbsp;&nbsp;5→十万分之</div>' +
-    '<div>　　　　　6→百万分之&nbsp;&nbsp;7→千万分之&nbsp;&nbsp;8→亿分之&nbsp;&nbsp;9→十亿分之&nbsp;&nbsp;10→百亿分之</div>' +
+    '<div class="cheat">末位尾数：1→十分之&nbsp;&nbsp;2→百分之&nbsp;&nbsp;3→千分之&nbsp;&nbsp;4→万分之&nbsp;&nbsp;5→十万分之</div>' +
+    '<div class="cheat">　　　　　6→百万分之&nbsp;&nbsp;7→千万分之&nbsp;&nbsp;8→亿分之&nbsp;&nbsp;9→十亿分之&nbsp;&nbsp;10→百亿分之&nbsp;&nbsp;11→千亿分之&nbsp;&nbsp;12→万亿分之</div>' +
     totalLine + '</div>';
 }
 
@@ -1541,15 +1560,16 @@ function headerXml(total){
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-    para(run('末位尾数：1→十分之  2→百分之  3→千分之  4→万分之  5→十万分之', false, 21)) +
-    para(run('　　　　　6→百万分之  7→千万分之  8→亿分之  9→十亿分之  10→百亿分之', false, 21)) +
+    para(run('末位尾数：1→十分之  2→百分之  3→千分之  4→万分之  5→十万分之', false, 18)) +
+    para(run('　　　　　6→百万分之  7→千万分之  8→亿分之  9→十亿分之  10→百亿分之  11→千亿分之  12→万亿分之', false, 18)) +
     totalPara +
     '</w:hdr>';
 }
 
 /* 由文档模型生成真实 .docx：A4、2.5cm 页边距、五号微软雅黑、1.0 倍行距，红绿灰三色与网页一致；
    live run 经 resolve 带当前值（空则留白），addBtn 段整段跳过；
-   查阅表（pb 标记起）为小五 9pt，并自该页起分节——新节页眉不含配号总数（下一页分节符兼作分页） */
+   主持稿为单 section：header1（速查表+红字配号总数）逐页显示；
+   查阅表固定模板独立导出（standaloneLookup）：全文小五 9pt，仅挂 header2（速查表无配号总数） */
 function docToDocxBlob(doc, resolve, headerTotal){
   function runXml(r, sz){
     if(r.live && r.live.kind === 'addBtn') return '';
@@ -1569,8 +1589,9 @@ function docToDocxBlob(doc, resolve, headerTotal){
       '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="851" w:footer="992" w:gutter="0"/></w:sectPr>';
   };
   var inLookup = false, hasLookup = false;
-  var paras = doc.map(function(p, idx){
-    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
+  /* 独立查阅表导出（首段即 pb 标记）：不打包 header1（配号总数页眉），全文挂 header2（仅速查表） */
+  var standaloneLookup = doc.length > 0 && doc[0].some(function(r){ return r.pb; });
+  var paras = doc.map(function(p, idx){    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
     if(p.some(function(r){ return r.pb; })){ inLookup = true; hasLookup = true; }   /* 查阅表起改小五 */
     /* 下一段为查阅表首段时，本段末尾插入分节符（新节页眉不含配号总数，分页由分节符承担） */
     var nextPb = idx + 1 < doc.length && doc[idx + 1].some(function(r){ return r.pb; });
@@ -1598,8 +1619,8 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
     '<Default Extension="xml" ContentType="application/xml"/>' +
     '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-    '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
-    '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+    (standaloneLookup ? '' : '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>') +
+    (hasLookup ? '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' : '') +
     '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
     '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
     '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
@@ -1615,8 +1636,8 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
-    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>' +
-    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>' +
+    (standaloneLookup ? '' : '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>') +
+    (hasLookup ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>' : '') +
     '</Relationships>';
   var stylesXml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -1639,17 +1660,18 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">' +
     '<Application>Microsoft Word</Application></Properties>';
   var enc = new TextEncoder();
-  return zipStore([
+  var files = [
     {name:'[Content_Types].xml', data:enc.encode(contentTypes)},
     {name:'_rels/.rels', data:enc.encode(rels)},
     {name:'docProps/core.xml', data:enc.encode(coreXml)},
     {name:'docProps/app.xml', data:enc.encode(appXml)},
     {name:'word/document.xml', data:enc.encode(documentXml)},
     {name:'word/_rels/document.xml.rels', data:enc.encode(docRels)},
-    {name:'word/styles.xml', data:enc.encode(stylesXml)},
-    {name:'word/header1.xml', data:enc.encode(headerXml(headerTotal == null ? '________' : headerTotal))},
-    {name:'word/header2.xml', data:enc.encode(headerXml(null))}   /* 查阅表所在节：页眉不含配号总数 */
-  ]);
+    {name:'word/styles.xml', data:enc.encode(stylesXml)}
+  ];
+  if(!standaloneLookup) files.push({name:'word/header1.xml', data:enc.encode(headerXml(headerTotal == null ? '________' : headerTotal))});
+  if(hasLookup) files.push({name:'word/header2.xml', data:enc.encode(headerXml(null))});   /* 查阅表：页眉仅速查表 */
+  return zipStore(files);
 }
 
 /* ============ 页面交互 ============ */
@@ -2300,6 +2322,22 @@ if(typeof document !== 'undefined'){
       setPdfStatus('解析失败：' + (err && err.message ? err.message : err), 'err');
     }).then(function(){ pdfBtn.disabled = false; });
   }
+
+  /* 摇号说法查阅表：固定模板，页底常驻、可单独导出（不属于主持稿导出内容） */
+  document.getElementById('lookupDoc').innerHTML =
+    '<table class="print-table pb"><thead><tr><td>' + pageHeaderHtml(null) +
+    '</td></tr></thead><tbody><tr><td>' + docToPreviewHtml(lookupParas(), null) + '</td></tr></tbody></table>';
+  document.getElementById('lookupDocxBtn').addEventListener('click', function(){
+    if(wxGuard()) return;
+    var blob = docToDocxBlob(lookupParas(), undefined, null);
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '摇号说法查阅表.docx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  });
 
   /* 初始：1 位主承销商嘉宾空行、标签同步 */
   addGuestRow(clientGuestRows);
