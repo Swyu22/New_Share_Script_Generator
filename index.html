@@ -357,8 +357,8 @@ var DENOM_NAMES = {3:'千', 4:'万', 5:'十万', 6:'百万', 7:'千万', 8:'亿'
 var SPLIT_MAP = {3:[2,1], 6:[5,1], 7:[5,2], 9:[5,4]};
 
 /* 数字读法（逐位带单位式）：按 万亿/亿/万 分节，节内非零位写"阿拉伯数字+单位"（十位用"拾"），
-   零位写裸 0、连续零位并为一个、节尾零位省略、全零节整节略去；节间无空格。
-   例：1723320→1百7拾2万3千3百2拾；10200384230→1百02亿03拾8万4千2百3拾 */
+   零位写汉字"零"、连续零位并为一个、节尾零位省略、全零节整节略去；亿/万节后两个空格。
+   例：1723320→1百7拾2万  3千3百2拾；10200384230→1百零2亿  零3拾8万  4千2百3拾 */
 function numToHanzi(n){
   var s = String(n).replace(/\D/g, '').replace(/^0+/, '');
   if(!s) return '0';
@@ -367,25 +367,25 @@ function numToHanzi(n){
   secs.unshift(s);
   var units = ['', '万', '亿', '万亿'];
   var placeUnits = ['', '拾', '百', '千'];   /* 个位无单位 */
-  var out = '';
+  var parts = [];
   for(var i = 0; i < secs.length; i++){
     var u = units[secs.length - 1 - i] || '';
     var str = i === 0 ? secs[0] : ('000' + secs[i]).slice(-4);   /* 首节按原样，其余节补零到 4 位 */
     var t = '';
     for(var j = 0; j < str.length; j++){
       var d = str.charCodeAt(j) - 48;
-      t += d === 0 ? '0' : d + placeUnits[str.length - 1 - j];
+      t += d === 0 ? '零' : d + placeUnits[str.length - 1 - j];
     }
-    t = t.replace(/0{2,}/g, '0').replace(/0+$/, '');   /* 连续零位并为一个、节尾零位省略 */
-    if(t) out += t + u;
+    t = t.replace(/零{2,}/g, '零').replace(/零+$/, '');   /* 连续零并为一个、节尾零省略 */
+    if(t) parts.push(t + u);
   }
-  return out;
+  return parts.join('  ');
 }
 
-/* 中签率逐位读法：0.0181348368 → 零点零壹 八壹三四 八三六八（前2位+每4位分节） */
+/* 中签率逐位读法：0.0143790914 → 零点零一 四三七九 零九一四（前2位+每4位分节） */
 function rateReadout(normStr){
   var dec = normStr.split('.')[1] || '';
-  var map = ['零','壹','二','三','四','五','六','七','八','九'];
+  var map = ['零','一','二','三','四','五','六','七','八','九'];
   var out = [];
   for(var i = 0; i < dec.length; i++) out.push(map[dec.charCodeAt(i) - 48]);
   var groups = [];
