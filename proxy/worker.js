@@ -3,7 +3,7 @@
  * 用途：巨潮 static.cninfo.com.cn 的 CORS 白名单只放行自家域名，
  *       页面（GitHub Pages）无法直接抓取公告 PDF，经本 Worker 中转。
  * 契约：GET /?url=<encodeURIComponent(目标URL)>
- *   → 透传上游字节流，并附加 Access-Control-Allow-Origin: *
+ *   → 透传上游字节流，并附加 Access-Control-Allow-Origin（白名单回显，否则固定为本站域）
  * 安全：仅允许 https 且主机在白名单内（含重定向目标），防止成为开放代理被滥用；
  *       仅 GET/HEAD；来源 Origin 不在白名单时拒绝（无 Origin 的非浏览器请求放行）。
  * 部署：见同目录 README.md
@@ -28,7 +28,10 @@ function isAllowedHost(u) {
 }
 
 function withCors(resp, origin) {
-  const r = new Response(resp.body, resp);
+  /* 204/304 等 null-body 状态码不允许带 body，直接重建头 */
+  const r = (resp.status === 204 || resp.status === 304)
+    ? new Response(null, { status: resp.status, statusText: resp.statusText, headers: resp.headers })
+    : new Response(resp.body, resp);
   /* 上游若声明了内容编码（gzip 等），Workers 会自动解压，透传字节数随之变化：
      移除 content-encoding 防二次解压损坏，并移除 content-length 防与实际字节数不符 */
   r.headers.delete('content-encoding');
@@ -36,6 +39,7 @@ function withCors(resp, origin) {
   r.headers.set('Access-Control-Allow-Origin', origin || '*');
   r.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   r.headers.set('Access-Control-Allow-Headers', '*');
+  r.headers.append('Vary', 'Origin');
   return r;
 }
 
