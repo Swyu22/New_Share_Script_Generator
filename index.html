@@ -361,6 +361,8 @@ var SPLIT_MAP = {3:[2,1], 6:[5,1], 7:[5,2], 9:[5,4]};
 
 /* 数字读法（逐位带单位式）：按 万亿/亿/万 分节，节内非零位写"阿拉伯数字+单位"（十位用"拾"），
    零位写汉字"零"、连续零位并为一个、节尾零位省略、全零节整节略去；亿/万节后两个空格。
+   2 的读法：百位/千位且为节内首个非零数字时读"两"（两百、两千、两百万）；整节恰为 2 且挂万/亿/万亿读"两"（两万、两亿）；
+   拾位/个位/节中位的 2 保持"2"（2拾亿、零2、1百零2亿、4千2百3拾）。
    例：1723320→1百7拾2万  3千3百2拾；10200384230→1百零2亿  零3拾8万  4千2百3拾 */
 function numToHanzi(n){
   var s = String(n).replace(/\D/g, '').replace(/^0+/, '');
@@ -374,16 +376,26 @@ function numToHanzi(n){
   for(var i = 0; i < secs.length; i++){
     var u = units[secs.length - 1 - i] || '';
     var str = i === 0 ? secs[0] : ('000' + secs[i]).slice(-4);   /* 首节按原样，其余节补零到 4 位 */
-    var t = '';
+    /* 整节恰为 2 且挂万/亿/万亿 → 读"两"（两万、两亿、两万亿） */
+    if(str === '2' && u){ parts.push('两' + u); continue; }
+    var t = '', seenNz = false;
     for(var j = 0; j < str.length; j++){
       var d = str.charCodeAt(j) - 48;
-      t += d === 0 ? '零' : d + placeUnits[str.length - 1 - j];
+      var pu = placeUnits[str.length - 1 - j];
+      if(d === 0){ t += '零'; continue; }
+      /* 百位/千位且为节内首个非零数字的 2 读"两"；节中（如 4千2百）与拾位/个位保持"2" */
+      var ch = (d === 2 && !seenNz && (pu === '百' || pu === '千')) ? '两' : String(d);
+      seenNz = true;
+      t += ch + pu;
     }
     t = t.replace(/零{2,}/g, '零').replace(/零+$/, '');   /* 连续零并为一个、节尾零省略 */
     if(t) parts.push(t + u);
   }
   return parts.join('  ');
 }
+
+/* 递增/递减间隔话术：阿拉伯原值＋括号读法（500000（5拾万）） */
+function fmtInterval(x){ return x + '（' + numToHanzi(x) + '）'; }
 
 /* 中签率逐位读法：0.0143790914 → 零点零一 四三七九 零九一四（前2位+每4位分节） */
 function rateReadout(normStr){
@@ -857,19 +869,26 @@ function prepareData(raw){
     return out;
   }
   var cg = parseGuests(raw.clientGuests || []);
-  /* 主承销商嘉宾可为 0 人：介绍段不出现，摇号环节不安排嘉宾 */
   var ig = parseGuests(raw.issuerGuests || []);
   v.clientGuestCo = (raw.clientGuestCo || '').trim() || v.client;
   v.issuerGuestCo = (raw.issuerGuestCo || '').trim() || v.company;
+
+  /* 介绍与邀请恒在：空缺组自动补 1 位字母嘉宾；人名空缺按出场顺序 A、B、C… 代替
+     （发行人嘉宾 → 主承销商嘉宾 → 公证员 → 公证人员）；职务空缺用角色名（发行人代表/主承销商代表） */
+  var letterN = 0;
+  function letter(){ return String.fromCharCode(65 + (letterN++ % 26)); }
+  function fillGuest(g, role){
+    if(!g.title) g.title = role;
+    if(!g.name) g.name = letter();
+    return g;
+  }
+  if(!ig.length) ig.push({title:'发行人代表', name:letter(), honor:'先生'});
+  else ig.forEach(function(g){ fillGuest(g, '发行人代表'); });
+  if(!cg.length) cg.push({title:'主承销商代表', name:letter(), honor:'先生'});
+  else cg.forEach(function(g){ fillGuest(g, '主承销商代表'); });
   v.clientGuests = cg;
   v.issuerGuests = ig;
   v.guests = ig.concat(cg);   /* 环节分配顺序：环节1→发行人嘉宾，其后主承销商嘉宾 */
-
-  /* 人名空缺者按出场顺序以 A、B、C… 代替：发行人嘉宾 → 主承销商嘉宾 → 公证员 → 公证人员 */
-  var letterN = 0;
-  function letter(){ return String.fromCharCode(65 + (letterN++ % 26)); }
-  ig.forEach(function(g){ if(!g.name) g.name = letter(); });
-  cg.forEach(function(g){ if(!g.name) g.name = letter(); });
   if(!v.notary1) v.notary1 = letter();
   if(!v.notary2) v.notary2 = letter();
 
@@ -1006,7 +1025,7 @@ function openerParas(st, part){
   if(part === undefined && st.type === 'B'){                            /* 不拆分 */
     return [[B('下面我们摇出 '), R(dn + ' 分之  ' + st.digit), B(' 的中签号码，'),
              R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-               numToHanzi(st.interval) + ' ，得到另外  ' + (st.digit - 1) + ' 个中签号码。')]];
+               fmtInterval(st.interval) + ' ，得到另外  ' + (st.digit - 1) + ' 个中签号码。')]];
   }
   if(part === 'splitA'){                                                /* 拆分 A 段 */
     var a = st.parts[0], b = st.parts[1];
@@ -1016,7 +1035,7 @@ function openerParas(st, part){
        B(' 和 '), R(dn + ' 分之  ' + b.m), B(' 。')],
       [B('首先我们摇出 '), R(dn + ' 分之  ' + a.m), B(' 的中签号码，'),
        R('摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-         numToHanzi(a.interval) + ' ，得到另外  ' + (a.m - 1) + ' 个中签号码。')]
+         fmtInterval(a.interval) + ' ，得到另外  ' + (a.m - 1) + ' 个中签号码。')]
     ];
   }
   /* 拆分 B 段（独立环节） */
@@ -1024,7 +1043,7 @@ function openerParas(st, part){
   var tail = pb.m === 1
     ? '摇出一个  ' + N + ' 位数 的中签号码。'
     : '摇出一个  ' + N + ' 位数 作为基本中签号码，然后递增或递减  ' +
-      numToHanzi(pb.interval) + ' ，得到另外  ' + (pb.m - 1) + ' 个中签号码。';
+      fmtInterval(pb.interval) + ' ，得到另外  ' + (pb.m - 1) + ' 个中签号码。';
   return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
 }
 
@@ -1051,7 +1070,7 @@ function lastRoundParas(v, r){
     out.push([R(cn.join('、'))]);              /* 汉字球号行（配合礼仪单独念一遍用） */
     out.push([G('（此表格供主持人记录）')]);
     out.push([{t:'', tbl:{digits:bList, cn:cn}}]);   /* 记录表格：2 行（数字/汉字）×10 列，空列供现场记录 */
-    out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
+    out.push([B('请开始摇出第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
     out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), leadLv]);
   }
   /* A/B 分支绿标：N 记法自闭合文案（N为首位数字），不再用跨行括号包住整段 */
@@ -1142,12 +1161,12 @@ function lookupParas(){
     [B('系统自动分配 倒数第_____位号码为 _____')],
     [G('（否则，有多个可选号码时，念出）')],
     [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
-    [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
+    [B('请开始摇出第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
     [],
     [G('（B、小于或等于的情况下：使用号球 0～N，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
     [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
-    [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
+    [B('请开始摇出第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
     [B('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')]
@@ -1169,24 +1188,20 @@ function buildDocument(v, rounds){
   P([B('上午好！欢迎光临 深圳证券信息有限公司  摇号抽签仪式现场。')]);
   P([B(v.company + ' '), R(v.kindInline), B('  摇号抽签仪式 现在开始！')]);
   P([B('本次摇号抽签是由')]);
-  P([B(v.client + ' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
-     G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
-  if(v.issuerGuests.length){
-    P([B('来自发行人方面的嘉宾有：')]);
-    v.issuerGuests.forEach(function(g){
-      P([B(v.issuerGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
-    });
-  }
-  if(v.clientGuests.length){
-    P([B('来自主承销商方面的嘉宾有：')]);
-    v.clientGuests.forEach(function(g){
-      P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
-    });
-  }
+  P([B(v.client + ' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，')]);
+  P([G('（每介绍一位嘉宾，中间稍作停顿，等嘉宾点头示意后，再继续介绍下一位。）')]);   /* 独立成行 */
+  P([B('来自发行人方面的嘉宾有：')]);   /* 恒在：先发行人 */
+  v.issuerGuests.forEach(function(g){
+    P([B(v.issuerGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
+  });
+  P([B('来自主承销商方面的嘉宾有：')]);   /* 恒在：后主承销商 */
+  v.clientGuests.forEach(function(g){
+    P([B(v.clientGuestCo + ' ' + g.title + ' ' + g.name + ' ' + g.honor + ' ')]);
+  });
   P([B('同时还有来自' + v.office + '：' + v.notary1 + ' 公证员 和 ' + v.notary2 + ' 公证人员。')]);
   P([B('欢迎各位嘉宾的到来，并预祝' + v.company + ' '), R(v.kindInline), B(' 获得圆满成功。')]);
-  P([B('在摇号开始前，我们先请 主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R(v.kindInline),
-     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  主承销商代表  签署《公平承诺书》，有请' +
+  P([B('在摇号开始前，我们先请 发行人代表、主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R(v.kindInline),
+     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  发行人代表  签署《公平承诺书》，有请  主承销商代表  签署《公平承诺书》，有请' +
        v.notary1 + ' 公证员 和 ' + v.notary2 + ' 公证人员 签署《公平承诺书》')]);
   BLANK();
 
@@ -1203,7 +1218,7 @@ function buildDocument(v, rounds){
   BLANK();
 
   /* ---- 挑选摇号球 ---- */
-  P([B('下面有请'), R('主承销商代表'), B(' 随机挑选三组不同的 摇号球。')]);
+  P([B('下面有请'), R('发行人代表'), B(' 为本次摇号抽签活动随机挑选三组不同的 摇号球。')]);
   P([B('选出的三组号码球分别是第'), LV('ball1', 'text', 5), B('组，第'), LV('ball2', 'text', 5), B('组，第'), LV('ball3', 'text', 5), B('组，')]);
   P([B('请工作人员依次将第'), LV('ball4', 'text', 5), B('组号码球倒入1号盒中，')]);
   P([B('　　　　　　　将第'), LV('ball5', 'text', 5), B('组号码球倒入2号盒中，')]);   /* 7 个全角空格＝"请工作人员依次"宽度，"将"与上句对齐 */
@@ -1253,12 +1268,12 @@ function buildDocument(v, rounds){
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——A')]);
       openerParas(st, 'splitA').forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 1), 'g' + (K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, a.m, a.interval ? numToHanzi(a.interval) : '', 'g' + (K + 1)));
+      P(resultPara(st.N, a.m, a.interval ? fmtInterval(a.interval) : '', 'g' + (K + 1)));
       BLANK();
       P([G(K + 2 + ' 、 ' + st.denom + ' 分之 ' + st.digit + ' ——B')]);
       openerParas(st, 'splitB').forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 2), 'g' + (K + 2)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, b.m, b.interval ? numToHanzi(b.interval) : '', 'g' + (K + 2)));
+      P(resultPara(st.N, b.m, b.interval ? fmtInterval(b.interval) : '', 'g' + (K + 2)));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 2;
@@ -1266,7 +1281,7 @@ function buildDocument(v, rounds){
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit)]);
       openerParas(st).forEach(function(p){ P(p); });
       passParas(st.N, guestAt(K + 1), 'g' + (K + 1)).forEach(function(p){ P(p); });
-      P(resultPara(st.N, st.digit, st.interval ? numToHanzi(st.interval) : '', 'g' + (K + 1)));
+      P(resultPara(st.N, st.digit, st.interval ? fmtInterval(st.interval) : '', 'g' + (K + 1)));
       BLANK();
       if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
       K += 1;
@@ -1334,14 +1349,16 @@ function buildSkeletonDoc(type){
   P([B('上午好！欢迎光临 深圳证券信息有限公司  摇号抽签仪式现场。')]);
   P([R(RB + ' '), R(kindInline), B('  摇号抽签仪式 现在开始！')]);
   P([B('本次摇号抽签是由')]);
-  P([R(RB), B(' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，'),
-     G('（每介绍一位嘉宾中间稍作停顿，等嘉宾点头示意后再继续介绍下一位）')]);
-  P([B('来自主承销商方面的嘉宾有：')]);
+  P([R(RB), B(' 委托、深圳证券信息有限公司  承办，欢迎各位嘉宾的到来。首先让我们来认识一下参加本次摇号抽签仪式的各位嘉宾，')]);
+  P([G('（每介绍一位嘉宾，中间稍作停顿，等嘉宾点头示意后，再继续介绍下一位。）')]);   /* 独立成行 */
+  P([B('来自发行人方面的嘉宾有：')]);   /* 恒在：先发行人 */
+  P([R(RB + ' ' + RB + ' ' + RB + ' ' + RB + ' ')]);
+  P([B('来自主承销商方面的嘉宾有：')]);   /* 恒在：后主承销商 */
   P([R(RB + ' ' + RB + ' ' + RB + ' ' + RB + ' ')]);
   P([B('同时还有来自'), R(RB), B('：'), R(RB), B(' 公证员 和 '), R(RB), B(' 公证人员。')]);
   P([B('欢迎各位嘉宾的到来，并预祝'), R(RB + ' '), R(kindInline), B(' 获得圆满成功。')]);
-  P([B('在摇号开始前，我们先请 主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R(kindInline),
-     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  主承销商代表  签署《公平承诺书》，有请'),
+  P([B('在摇号开始前，我们先请 发行人代表、主承销商代表 及 公证员 签署《公平承诺书》，承诺本次'), R(kindInline),
+     B(' 摇号抽签活动 客观、公平、公正，符合国家法律法规的有关规定，不存在任何虚假、舞弊行为。 首先有请  发行人代表  签署《公平承诺书》，有请  主承销商代表  签署《公平承诺书》，有请'),
      R(RB), B(' 公证员 和 '), R(RB), B(' 公证人员 签署《公平承诺书》')]);
   BLANK();
 
@@ -1355,7 +1372,7 @@ function buildSkeletonDoc(type){
   P([B('中签率为 '), R(RB + ' %  （百分之  ' + RB + '）')]);
   BLANK();
 
-  P([B('下面有请'), R('主承销商代表'), B(' 随机挑选三组不同的 摇号球。')]);
+  P([B('下面有请'), R('发行人代表'), B(' 为本次摇号抽签活动随机挑选三组不同的 摇号球。')]);
   P([B('选出的三组号码球分别是第_____组，第_____组，第_____组，')]);
   P([B('请工作人员依次将第_____组号码球倒入1号盒中，')]);
   P([B('　　　　　　　将第_____组号码球倒入2号盒中，')]);   /* 7 个全角空格＝"请工作人员依次"宽度 */
