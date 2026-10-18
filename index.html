@@ -163,6 +163,9 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 .print-table.pb tbody p{font-size:.9rem}   /* 查阅表：小五（屏幕按比例缩小） */
 /* 查阅表各环节蓝框分节（预览与打印一致；Word 侧用段落边框合并实现） */
 .lk-box{border:1.5px solid #2563eb;border-radius:6px;padding:6px 12px;margin:10px 0}
+/* 最后一步记录表格（主持人手写记录用）：数字行/汉字行 × 10 列 */
+.rec-tbl{width:auto;border-collapse:collapse;table-layout:fixed;margin:6px 0;white-space:normal}
+.rec-tbl td{border:1px solid #666;min-width:2.2em;height:1.7em;text-align:center;color:#FF0000;font-weight:700;padding:2px 6px}
 /* 页底固定查阅表卡片 */
 .lookup-card{margin-top:22px}
 .lookup-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px}
@@ -1025,8 +1028,8 @@ function openerParas(st, part){
   return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
 }
 
-/* 最后一步单轮段落（lp=live 前缀；withGuide 仅首轮带灰色指引）。空白计数与原模板逐字一致 */
-function lastRoundParas(v, r, withGuide){
+/* 最后一步单轮段落（lp=live 前缀）。空白计数与原模板逐字一致 */
+function lastRoundParas(v, r){
   var D = v.D;
   var balls = [];
   for(var bi = 0; bi <= Number(v.firstDigit); bi++) balls.push(String(bi));
@@ -1036,13 +1039,6 @@ function lastRoundParas(v, r, withGuide){
   passParas(D - 1, null, lp).forEach(function(p){ out.push(p); });
   out.push([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是'), LV(lp + 'tail', 'num', 12, {N:D - 1}), B(' '), G('（根据显示屏读出）')]);
   out.push([]);
-  if(withGuide){
-    out.push([M('（指引：接下来确定该号码的最高位（倒数第 ' + D + ' 位）。把刚摇出的后 ' + (D - 1) +
-      ' 位与配号总数的后 ' + (D - 1) + ' 位“ ' + v.lastDigits + ' ”比较，情形如下：）')]);
-    out.push([M('（1.大于时：使用号球范围 0～（首位数字−1）；若只剩一个选择，号码由电脑系统自动产生，按 A 项照屏幕念出；有多个选择时，按 A 项由工作人员把相应号球放入 1 号机摇出。）')]);
-    out.push([M('（2.小于或等于时：使用号球范围 0～' + v.firstDigit + '，按 B 项由工作人员放入 1 号机摇出。）')]);
-    out.push([M('（3.多轮重复摇号时，前一次已摇出的号球须从号球范围中去掉，再以剩余号球摇出。产生一个完整号码后若仍有剩余，重复上述步骤，直到剩余个数为 0。）')]);
-  }
   out.push([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
   /* A：大于 → 号球 0～首位−1。只剩 1 个可选（首位为 1）时由电脑系统自动分配；
      有多个可选时与 B 同样话术：号球放入 1 号机摇出（如配号首位 2 → 大于用 0、1 机摇） */
@@ -1050,9 +1046,11 @@ function lastRoundParas(v, r, withGuide){
   function drawLeadLines(bList, leadLv){
     var cn = bList.map(function(b){ return CN_DIGITS[Number(b)]; });
     out.push([B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：'),
-      G('（连续的数字念：“' + bList[0] + '至' + bList[bList.length - 1] + '”，随后配合礼仪用汉字单独念一遍数字）')]);
-    out.push([R(bList.join(' 、 ') + ' 、 ')]);   /* 球号行顶格左对齐（与汉字行一致） */
-    out.push([R(cn.join(' 、 ') + ' 、 ')]);       /* 主持人对镜头再念一遍球号（数字汉字读法） */
+      G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')]);
+    out.push([R(bList.join('、'))]);           /* 数字球号行（紧凑，与汉字行一致顶格左对齐） */
+    out.push([R(cn.join('、'))]);              /* 汉字球号行（配合礼仪单独念一遍用） */
+    out.push([G('（此表格供主持人记录）')]);
+    out.push([{t:'', tbl:{digits:bList, cn:cn}}]);   /* 记录表格：2 行（数字/汉字）×10 列，空列供现场记录 */
     out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
     out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), leadLv]);
   }
@@ -1143,12 +1141,12 @@ function lookupParas(){
     [G('（只剩一个可选号码时：由电脑系统自动分配，照屏幕念出）')],
     [B('系统自动分配 倒数第_____位号码为 _____')],
     [G('（否则，有多个可选号码时，念出）')],
-    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“N至N”，随后配合礼仪用汉字单独念一遍数字）')],
+    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
     [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
     [],
     [G('（B、小于或等于的情况下：使用号球 0～N，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
-    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“N至N”，随后配合礼仪用汉字单独念一遍数字）')],
+    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
     [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
     [B('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
@@ -1212,7 +1210,7 @@ function buildDocument(v, rounds){
   P([B('　　　　　　　将第'), LV('ball6', 'text', 5), B('组号码球倒入3号盒中，')]);
   P([B('有请公证员检查摇号球'), G('（留意检查情况）')]);
   P([B('请工作人员  将三组摇号球  分别放入摇号机中。'), G('（等待工作人员放置摇号球）')]);
-  P([B('请公证员 进场检查 摇号器具。'), G('（公证员讲话）')]);
+  P([B('请公证员 进场检查 摇号器具。'), G('（此时下场）'), G('（公证员讲话）')]);
   P([B('谢谢公证员！')]);
   BLANK();
 
@@ -1297,10 +1295,10 @@ function buildDocument(v, rounds){
   P([G(K + 2 + ' 、最后一步')]);
   P([R('经计算，现在还有 '), LV('remainingEcho', 'comp', 4), R(' 个 ' + D + ' 位数的中签号码未产生。')]);
   for(var rl = 1; rl <= rounds.last; rl++){
-    lastRoundParas(v, rl, rl === 1).forEach(function(p){ P(p); });
+    lastRoundParas(v, rl).forEach(function(p){ P(p); });
   }
   P(ADDBTN('last'));
-  P([G('（留意剩余号码个数，如果不为0，则重复上面的步骤，直到 最后一个  ' + D + ' 位数的中签号码产生）')]);
+  P([G('（看剩余号码个数，若不为0，则重复上面步骤，直到最后一个' + D + '位数中签号码产生）')]);
   BLANK();
   P(fanPara(D));
   BLANK();
@@ -1364,7 +1362,7 @@ function buildSkeletonDoc(type){
   P([B('　　　　　　　将第_____组号码球倒入3号盒中，')]);
   P([B('有请公证员检查摇号球'), G('（留意检查情况）')]);
   P([B('请工作人员  将三组摇号球  分别放入摇号机中。'), G('（等待工作人员放置摇号球）')]);
-  P([B('请公证员 进场检查 摇号器具。'), G('（公证员讲话）')]);
+  P([B('请公证员 进场检查 摇号器具。'), G('（此时下场）'), G('（公证员讲话）')]);
   P([B('谢谢公证员！')]);
   BLANK();
 
@@ -1409,6 +1407,7 @@ function docToText(doc, resolve){
   var out = [];
   doc.forEach(function(p){
     if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return;
+    if(p.length === 1 && p[0].tbl) return;   /* 记录表格：纯视觉辅助，文本导出跳过（球号行本身已含） */
     out.push(p.map(function(r){ return runToText(r, resolve); }).join(''));
   });
   return out.join('\n');
@@ -1462,6 +1461,11 @@ function docToPreviewHtml(doc, state){
     else if(p.length === 1 && p[0].live && p[0].live.kind === 'addBtn'){
       html = '<p class="lv-addrow no-print"><button type="button" class="btn ghost btn-sm" data-addround="' +
         p[0].live.where + '">＋ 再摇一轮</button></p>';
+    }else if(p.length === 1 && p[0].tbl){
+      /* 记录表格：2 行（数字/汉字）×10 列，空列供现场记录 */
+      var tb = p[0].tbl;
+      var cells = function(arr){ var h = ''; for(var ci = 0; ci < 10; ci++) h += '<td>' + escHtml(arr[ci] || '') + '</td>'; return h; };
+      html = '<table class="rec-tbl"><tbody><tr>' + cells(tb.digits) + '</tr><tr>' + cells(tb.cn) + '</tr></tbody></table>';
     }else{
       var inner = p.map(function(r){
         if(r.live){
@@ -1591,7 +1595,32 @@ function docToDocxBlob(doc, resolve, headerTotal){
   var inLookup = false, hasLookup = false;
   /* 独立查阅表导出（首段即 pb 标记）：不打包 header1（配号总数页眉），全文挂 header2（仅速查表） */
   var standaloneLookup = doc.length > 0 && doc[0].some(function(r){ return r.pb; });
-  var paras = doc.map(function(p, idx){    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
+  /* 记录表格（最后一步号球区）：2 行（数字/汉字）×10 列带边框，空列供现场记录 */
+  function tblXml(tb){
+    function cell(t){
+      return '<w:tc><w:tcPr><w:tcW w:w="907" w:type="dxa"/></w:tcPr>' +
+        '<w:p><w:pPr><w:spacing w:after="80" w:line="240" w:lineRule="auto"/></w:pPr>' +
+        (t ? '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+          '<w:color w:val="FF0000"/><w:b/><w:bCs/><w:spacing w:val="17"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr>' +
+          '<w:t xml:space="preserve">' + escHtml(t) + '</w:t></w:r>' : '') +
+        '</w:p></w:tc>';
+    }
+    var rows = '';
+    [tb.digits, tb.cn].forEach(function(arr){
+      rows += '<w:tr>';
+      for(var i = 0; i < 10; i++) rows += cell(arr[i] || '');
+      rows += '</w:tr>';
+    });
+    return '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>' +
+      '<w:tblBorders>' + ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(function(b){
+        return '<w:' + b + ' w:val="single" w:sz="4" w:space="0" w:color="auto"/>';
+      }).join('') + '</w:tblBorders>' +
+      '<w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid>' + '<w:gridCol w:w="907"/>'.repeat(10) + '</w:tblGrid>' + rows + '</w:tbl>';
+  }
+  var paras = doc.map(function(p, idx){
+    if(p.length > 0 && p.every(function(r){ return r.live && r.live.kind === 'addBtn'; })) return '';
+    if(p.length === 1 && p[0].tbl) return tblXml(p[0].tbl);   /* 记录表格：块级元素（球号行本身已含数字） */
     if(p.some(function(r){ return r.pb; })){ inLookup = true; hasLookup = true; }   /* 查阅表起改小五 */
     /* 下一段为查阅表首段时，本段末尾插入分节符（新节页眉不含配号总数，分页由分节符承担） */
     var nextPb = idx + 1 < doc.length && doc[idx + 1].some(function(r){ return r.pb; });
