@@ -1091,6 +1091,7 @@ function lastRoundParas(v, r){
   out.push([]);   /* 摇出结果与记录表格之间空行 */
   out.push([G('（此表格供主持人记录）')]);
   out.push([{t:'', tbl:{digits:balls, cn:ballsCn}}]);   /* 记录表格：2 行×10 列，空列供现场记录 */
+  out.push([]);   /* 记录表格与次数注释之间空行 */
   out.push([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
   out.push([]);   /* 次数注释与完整号码产生句之间空行 */
   out.push([R('第'), LV(lp + '_idx2', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码已经产生，是'), LV(lp + 'final', 'num', 22, {N:D})]);
