@@ -93,7 +93,7 @@ fieldset .btn-row{margin-top:12px}   /* fieldset 内网格与按钮行的间距�
 /* 现场实时辅助 */
 .live-card{padding:20px 22px;margin-bottom:22px}
 .live-card h2{font-size:1.05rem;margin-bottom:10px;color:var(--blue-dark)}
-.live-card .muted-sm{color:var(--muted);font-size:.8rem;font-weight:400}
+.muted-sm{color:var(--muted);font-size:.8rem;font-weight:400}
 .live-status{display:flex;gap:8px 18px;flex-wrap:wrap;font-size:.92rem;margin-bottom:12px;padding:10px 14px;background:var(--blue-50);border-radius:8px}
 .live-status b{color:var(--blue-dark)}
 .live-status .st-p2{color:var(--blue-dark);font-weight:600}
@@ -113,6 +113,7 @@ fieldset .btn-row{margin-top:12px}   /* fieldset 内网格与按钮行的间距�
 .lv-bad{border-bottom-color:var(--red)!important;background:#fee2e2!important}
 .lv-addrow{margin:4px 0}
 .lv-addrow .btn-sm{margin-top:0;border-style:dashed}
+.lookup-head .btn-sm,.live-actions .btn-sm{margin-top:0}   /* flex 行内不再叠加上边距 */
 @media (max-width:600px){
   .guest-row{grid-template-columns:1fr 1fr}
 }
@@ -132,6 +133,7 @@ tr.hidden-step td{color:var(--muted);background:#fafbfd}
 /* 主持稿正文：逐字复刻模板（红=计算值，绿=提示语），保留原文空格；字体与 UI 统一 */
 .script-doc{
   padding:34px 38px;
+  font-family:SimSun,"宋体",serif;   /* 主持稿区域（含页眉/查阅表卡片）统一宋体，与导出 Word 一致 */
 }
 .script-doc p{
   font-size:1.06rem;line-height:2;   /* 屏幕预览：字号/行距保持旧版（导出 Word/PDF 为五号/1.0，见 @media print） */
@@ -181,6 +183,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   .print-table.pb{page-break-before:always}   /* 摇号说法查阅表：新起一页（拆表方案，单元格内强制分页不稳，勿改回） */
   .print-table.pb tbody p{font-size:9pt}   /* 查阅表：小五（与 Word sz 18 一致） */
   .lk-box{margin:8pt 0}
+  .lk-box.brk{page-break-before:always;page-break-inside:avoid}   /* 末步蓝框：单独起页并尽量整页展示 */
 }
 
 /* 微信内导出引导遮罩（微信内置浏览器不支持网页下载与打印，引导到系统浏览器） */
@@ -222,7 +225,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   .container{max-width:none;padding:0}
   .card{border:none;box-shadow:none;padding:0;margin:0}
   .script-doc{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;
-    font-family:"Microsoft YaHei","微软雅黑",sans-serif}   /* 打印版式严格对齐导出 Word */
+    font-family:SimSun,"宋体",serif}   /* 打印版式严格对齐导出 Word（SimSun 五号） */
   .script-doc p{font-size:10.5pt;line-height:1.0;letter-spacing:.06em;margin:0 0 4pt}   /* 段后 4pt = Word w:after=80twips */
 }
 </style>
@@ -321,7 +324,7 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   </div>
   <div class="card live-card no-print" id="liveCard" style="display:none">
     <h2>现场摇号记录<span class="muted-sm">（填写稿中摇号数字后实时更新）</span></h2>
-    <div class="live-status" id="liveStatus"></div>
+    <div class="live-status" id="liveStatus" aria-live="polite"></div>
     <div class="table-wrap"><table id="liveTable"></table></div>
     <div class="live-actions"><button class="btn ghost btn-sm" id="liveClearBtn" type="button">清空已填写</button></div>
   </div>
@@ -343,9 +346,9 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   <div id="lookupDoc"></div>
 </section>
 
-<div class="wx-mask no-print" id="wxMask" style="display:none">
+<div class="wx-mask no-print" id="wxMask" style="display:none" role="dialog" aria-modal="true" aria-labelledby="wxTitle">
   <div class="card wx-tip">
-    <h3>微信内无法直接导出文件</h3>
+    <h3 id="wxTitle">微信内无法直接导出文件</h3>
     <div id="wxSteps"></div>
     <p>也可以先点「一键复制全文」，把主持稿粘贴到备忘录或 WPS 等文档 App 中使用。</p>
     <button class="btn" id="wxClose" type="button">我知道了</button>
@@ -565,17 +568,17 @@ function computeLive(v, st){
     var xs = [];
     for(var i = 0; i < numStrs.length; i++){
       var s = numStrs[i];
-      if(!/^\d+$/.test(s)) return {error:'含非数字'};
-      if(s.length !== g.N) return {error:'须为 ' + g.N + ' 位数字'};
+      if(!/^\d+$/.test(s)) return {error:'含非数字', errIdx:i};   /* errIdx：0=基本号、>0=展开行 */
+      if(s.length !== g.N) return {error:'须为 ' + g.N + ' 位数字', errIdx:i};
       xs.push(Number(s));
     }
     for(var j = 0; j < xs.length; j++){
       /* 同组内部重复（基本号与展开号抄重等）：此前只查跨环节重复，同组恰满个数时会静默多计 */
       for(var k = j + 1; k < xs.length; k++){
-        if(xs[j] === xs[k]) return {error:'本组号码自相重复（' + ('000000000000' + xs[j]).slice(-g.N) + '），请核对'};
+        if(xs[j] === xs[k]) return {error:'本组号码自相重复（' + ('000000000000' + xs[j]).slice(-g.N) + '），请核对', errIdx:k};
       }
       var bad = collideAny(xs[j], g.N, produced);
-      if(bad) return {error:'与先前中签号码重复（' + ('000000000000' + bad.x).slice(-bad.N) + '），本轮无效需重摇'};
+      if(bad) return {error:'与先前中签号码重复（' + ('000000000000' + bad.x).slice(-bad.N) + '），本轮无效需重摇', errIdx:j};
     }
     var add = 0;
     xs.forEach(function(x){ add += coverCount(x, g.N, total); });
@@ -597,8 +600,8 @@ function computeLive(v, st){
     }
     var r = checkNums(g, list);
     if(r.error){
-      /* 基本号格式正常而报错时，问题在展开行 → 高亮 exp 输入框而非 num */
-      var errId = (g.m > 1 && /^\d+$/.test(base) && base.length === g.N) ? g.id + 'exp' : g.id + 'num';
+      /* errIdx=0 → 基本号输入框，>0 → 展开行输入框 */
+      var errId = (g.m > 1 && r.errIdx > 0) ? g.id + 'exp' : g.id + 'num';
       rows.push({id:errId, label:g.label, N:g.N, nums:list.slice().sort().join(' '), add:'', status:r.error, bad:true}); return;
     }
     /* 展开个数应为 m（基本号 + 另外 m-1 个）：个数不符时软警示（仍按实填计入，供人工核对） */
@@ -779,7 +782,7 @@ function parseAnnouncement(rawText){
   }
   if(!fields.issue) missing.push('网上定价发行量');
 
-  var total = cap(/配号总[数量][为：:]?([\d,]+)个?/);
+  var total = cap(/配号(?:总数|数量|总数量)[为：:]?([\d,]+)个?/);   /* 兼容 配号总数/配号数量/配号总数量 */
   if(total) fields.total = cnNum(total); else missing.push('申购配号总数');
 
   /* 每 N 股/张/手一个申购号：优先公告直述，否则由 有效申购数÷配号总数 推导 */
@@ -979,8 +982,9 @@ function LV(id, kind, blank, extra){
 /* 加轮按钮占位段：预览渲染为按钮行，文本/Word 导出时整段跳过 */
 function ADDBTN(where){ return [{t:'', live:{kind:'addBtn', where:where}}]; }
 
-/* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块；lp 非空时数字位可填写） */
-function passParas(N, guest, lp){
+/* 逐位摇号过程段落（guest 非空时在首轮插入嘉宾摇号块；lp 非空时数字位可填写；
+   dropHint=true 时第 2、3 程起不再带（留意摇号情况）——仅末步用） */
+function passParas(N, guest, lp, dropHint){
   var out = [];
   var passes = drawPasses(N);
   passes.forEach(function(ps, i){
@@ -994,6 +998,8 @@ function passParas(N, guest, lp){
                     ' 来到1号 摇号机旁 进行摇号。'), G('（等待嘉宾就位）'), B(' 】')]);
       }
       out.push([B('请开始摇号'), G('（留意摇号情况）')]);
+    }else if(dropHint){
+      out.push([B(intro + '请开始摇号')]);
     }else{
       out.push([B(intro + '请开始摇号'), G('（留意摇号情况）')]);
     }
@@ -1056,43 +1062,33 @@ function openerParas(st, part){
   return [[B('下面我们摇出 '), R(dn + ' 分之  ' + pb.m), B(' 的中签号码，'), R(tail)]];
 }
 
-/* 最后一步单轮段落（lp=live 前缀）。空白计数与原模板逐字一致 */
+/* 最后一步单轮段落（lp=live 前缀）：单流程精简版（中科润宇修改版）——
+   三条绿斜体情形行覆盖大于/小于等于/只剩一个可选号码；放球句与念球提示各独立成行；
+   记录表格一张（在"倒数第X位已经产生"之后）；次数注释恢复（在完整号码产生句之前） */
 function lastRoundParas(v, r){
   var D = v.D;
   var balls = [];
   for(var bi = 0; bi <= Number(v.firstDigit); bi++) balls.push(String(bi));
+  var ballsCn = balls.map(function(b){ return CN_DIGITS[Number(b)]; });
   var lp = 'last_' + r;
   var out = [];
   out.push([R('下面我们摇出  第'), LV(lp + '_idx', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码。')]);
-  passParas(D - 1, null, lp).forEach(function(p){ out.push(p); });
-  out.push([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是'), LV(lp + 'tail', 'num', 12, {N:D - 1}), B(' '), G('（根据显示屏读出）')]);
+  passParas(D - 1, null, lp, true).forEach(function(p){ out.push(p); });
+  out.push([R(D + ' 位数的后  ' + (D - 1) + ' 位号码已经产生，是'), LV(lp + 'tail', 'num', 12, {N:D - 1})]);
   out.push([]);
   out.push([B('由于'), R('大于（小于）'), B(' 配号总数的后 '), R(String(D - 1)), B(' 位数 '), R(v.lastDigits)]);
-  /* A：大于 → 号球 0～首位−1。只剩 1 个可选（首位为 1）时由电脑系统自动分配；
-     有多个可选时与 B 同样话术：号球放入 1 号机摇出（如配号首位 2 → 大于用 0、1 机摇） */
-  var ballsA = balls.slice(0, balls.length - 1);
-  function drawLeadLines(bList, leadLv){
-    var cn = bList.map(function(b){ return CN_DIGITS[Number(b)]; });
-    out.push([B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：'),
-      G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')]);
-    out.push([R(bList.join('、'))]);           /* 数字球号行（紧凑，与汉字行一致顶格左对齐） */
-    out.push([R(cn.join('、'))]);              /* 汉字球号行（配合礼仪单独念一遍用） */
-    out.push([G('（此表格供主持人记录）')]);
-    out.push([{t:'', tbl:{digits:bList, cn:cn}}]);   /* 记录表格：2 行（数字/汉字）×10 列，空列供现场记录 */
-    out.push([B('请开始摇出第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
-    out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), leadLv]);
-  }
-  /* A/B 分支绿标：N 记法自闭合文案（N为首位数字），不再用跨行括号包住整段 */
-  if(ballsA.length <= 1){
-    out.push([G('（A、大于的情况下：使用号球 0～N-1，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')]);
-    out.push([R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1})]);
-  }else{
-    out.push([G('（A、大于的情况下：使用号球 0～N-1，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')]);
-    drawLeadLines(ballsA, LV(lp + 'leadA', 'num', 15, {N:1}));
-  }
-  out.push([G('（B、小于或等于的情况下：使用号球 0～N，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')]);
-  drawLeadLines(balls, LV(lp + 'lead', 'num', 15, {N:1}));
-  out.push([]);
+  out.push([G('（大于的情况下：使用号球 0～N-1）')]);
+  out.push([G('（小于或等于的情况下：使用号球 0～N）')]);
+  out.push([G('（只剩下一个可选号码：'), B(' '), R('系统自动分配 倒数第  ' + D + ' 位号码为 '), LV(lp + 'assign', 'num', 5, {N:1}), B('  '), G('）')]);
+  out.push([B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')]);
+  out.push([G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')]);
+  out.push([R(balls.join('、'))]);              /* 数字球号行（0～首位，顶格左对齐） */
+  out.push([R(ballsCn.join('、'))]);            /* 汉字球号行 */
+  out.push([B('请由1号机摇出倒数第 '), R(String(D)), B(' 位的号码   '), G('（留意摇号情况）')]);
+  out.push([B('倒数第 '), R(String(D)), B(' 位号码已经产生，是'), LV(lp + 'lead', 'num', 15, {N:1})]);
+  out.push([G('（此表格供主持人记录）')]);
+  out.push([{t:'', tbl:{digits:balls, cn:ballsCn}}]);   /* 记录表格：2 行×10 列，空列供现场记录 */
+  out.push([G('次数：1、 2、 3、 4、 5、 6、 7、 8、 9')]);
   out.push([R('第'), LV(lp + '_idx2', 'comp', 5, {r:r}), R('个（最后一个）  ' + D + ' 位数的中签号码已经产生，是'), LV(lp + 'final', 'num', 22, {N:D})]);
   out.push([]);
   return out;
@@ -1162,20 +1158,15 @@ function lookupParas(){
     [B('经计算，现在还有 ____ 个 ____ 位数的中签号码未产生。')],
     [B('下面我们摇出 第_____个（最后一个） ____ 位数的中签号码。')],
     [G('（此处进入通用摇号环节）')],
-    [B('____ 位数的后 ____ 位号码已经产生，是____________ '), G('（根据显示屏读出）')],
+    [B('____ 位数的后 ____ 位号码已经产生，是____________ ')],
     [B('由于大于（小于） 配号总数的后 ____ 位数 ____________')],
-    [],
-    [G('（A、大于的情况下：使用号球 0～N-1，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
-    [G('（只剩一个可选号码时：由电脑系统自动分配，照屏幕念出）')],
-    [B('系统自动分配 倒数第_____位号码为 _____')],
-    [G('（否则，有多个可选号码时，念出）')],
-    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
-    [B('请开始摇出第 ____ 位的号码   '), G('（留意摇号情况）')],
-    [B('倒数第 ____ 位号码已经产生，是_______________')],
-    [],
-    [G('（B、小于或等于的情况下：使用号球 0～N，N为首位数字；已摇出的号球不再放回，下一轮从范围中去掉后再摇。）')],
-    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：____ 、'), G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
-    [B('请开始摇出第 ____ 位的号码   '), G('（留意摇号情况）')],
+    [G('（大于的情况下：使用号球 0～N-1）')],
+    [G('（小于或等于的情况下：使用号球 0～N）')],
+    [G('（只剩下一个可选号码：系统自动分配 倒数第 ____ 位号码为 _____）')],
+    [B('请工作人员将1号机的全部号码球取出，将以下号码球放入摇号机中：')],
+    [G('（连续的数字念：“几至几”，随后再配合礼仪用汉字单独念一遍）')],
+    [B('____ 、 ____ 、 ____ 、……')],
+    [B('请由1号机摇出倒数第 ____ 位的号码   '), G('（留意摇号情况）')],
     [B('倒数第 ____ 位号码已经产生，是_______________')],
     [B('第_____个（最后一个） ____ 位数的中签号码已经产生，是______________________')],
     [B('凡申购号码 末 ____ 位数 与以上产生的号码相同 即中签。')]
@@ -1284,7 +1275,7 @@ function buildDocument(v, rounds){
       passParas(st.N, guestAt(K + 2), 'g' + (K + 2)).forEach(function(p){ P(p); });
       P(resultPara(st.N, b.m, b.interval ? fmtInterval(b.interval) : '', 'g' + (K + 2)));
       BLANK();
-      if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
+      P(fanPara(st.N)); BLANK();   /* 每个环节结尾都有凡申购句（含与倒数第二步同位数时） */
       K += 2;
     }else{
       P([G(K + 1 + ' 、 ' + st.denom + ' 分之 ' + st.digit)]);
@@ -1292,7 +1283,7 @@ function buildDocument(v, rounds){
       passParas(st.N, guestAt(K + 1), 'g' + (K + 1)).forEach(function(p){ P(p); });
       P(resultPara(st.N, st.digit, st.interval ? fmtInterval(st.interval) : '', 'g' + (K + 1)));
       BLANK();
-      if(st.N !== v.maxN){ P(fanPara(st.N)); BLANK(); }   /* 与倒数第二步同 N 时不重复凡申购句 */
+      P(fanPara(st.N)); BLANK();   /* 每个环节结尾都有凡申购句（含与倒数第二步同位数时） */
       K += 1;
     }
   });
@@ -1316,13 +1307,15 @@ function buildDocument(v, rounds){
   /* ---- 最后一步（可多轮，rounds.last） ---- */
   var D = v.D;
   openBox();
-  P([G(K + 2 + ' 、最后一步')]);
+  var lastTitle = G(K + 2 + ' 、最后一步');
+  lastTitle.brk = true;   /* 导出时末步单独成页（docx 分页符 / 打印 break-before） */
+  P([lastTitle]);
   P([R('经计算，现在还有 '), LV('remainingEcho', 'comp', 4), R(' 个 ' + D + ' 位数的中签号码未产生。')]);
   for(var rl = 1; rl <= rounds.last; rl++){
     lastRoundParas(v, rl).forEach(function(p){ P(p); });
   }
   P(ADDBTN('last'));
-  P([G('（看剩余号码个数，若不为0，则重复上面步骤，直到最后一个' + D + '位数中签号码产生）')]);
+  P([G('（留意剩余号码个数，如果不为0，则重复上面的步骤，直到 最后一个中签号码产生）')]);
   BLANK();
   P(fanPara(D));
   BLANK();
@@ -1515,8 +1508,8 @@ function docToPreviewHtml(doc, state){
       }).join('');
       html = '<p>' + inner + '</p>';
     }
-    /* 蓝框分节（查阅表各环节）：段首开 div、段尾闭合 */
-    if(p.box === 's' || p.box === 'solo') html = '<div class="lk-box">' + html;
+    /* 蓝框分节（查阅表各环节）：段首开 div、段尾闭合；brk 标记（末步）打印新起一页 */
+    if(p.box === 's' || p.box === 'solo') html = '<div class="lk-box' + (p.some(function(r){ return r.brk; }) ? ' brk' : '') + '">' + html;
     if(p.box === 'e' || p.box === 'solo') html += '</div>';
     return html;
   }).join('');
@@ -1576,7 +1569,7 @@ function zipStore(entries){
 function headerXml(total){
   function para(runs){ return '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' + runs + '</w:p>'; }
   function run(t, red, sz){
-    return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+    return '<w:r><w:rPr><w:rFonts w:ascii="SimSun" w:eastAsia="SimSun" w:hAnsi="SimSun"/>' +
       (red ? '<w:color w:val="FF0000"/><w:b/><w:bCs/>' : '') +
       '<w:sz w:val="' + sz + '"/><w:szCs w:val="' + sz + '"/></w:rPr>' +
       '<w:t xml:space="preserve">' + escHtml(t) + '</w:t></w:r>';
@@ -1606,7 +1599,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     var t = escHtml(runToText(r, resolve));
     if(!t) return '';
     var color = r.c === 'r' ? 'FF0000' : r.c === 'g' ? '228B22' : r.c === 'm' ? '94A3B8' : '';
-    return '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+    return '<w:r><w:rPr><w:rFonts w:ascii="SimSun" w:eastAsia="SimSun" w:hAnsi="SimSun"/>' +
       (color ? '<w:color w:val="' + color + '"/>' : '') +
       (r.c === 'r' ? '<w:b/><w:bCs/>' : '') +      /* 填入/计算值：加粗 */
       (r.c === 'g' ? '<w:i/><w:iCs/>' : '') +      /* 现场提示语：斜体 */
@@ -1627,7 +1620,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     function cell(t){
       return '<w:tc><w:tcPr><w:tcW w:w="907" w:type="dxa"/></w:tcPr>' +
         '<w:p><w:pPr><w:spacing w:after="80" w:line="240" w:lineRule="auto"/></w:pPr>' +
-        (t ? '<w:r><w:rPr><w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+        (t ? '<w:r><w:rPr><w:rFonts w:ascii="SimSun" w:eastAsia="SimSun" w:hAnsi="SimSun"/>' +
           '<w:color w:val="FF0000"/><w:b/><w:bCs/><w:spacing w:val="13"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr>' +
           '<w:t xml:space="preserve">' + escHtml(t) + '</w:t></w:r>' : '') +
         '</w:p></w:tc>';
@@ -1665,7 +1658,9 @@ function docToDocxBlob(doc, resolve, headerTotal){
         '<w:right w:val="single" w:sz="12" w:space="4" w:color="2563EB"/>' +
         '</w:pBdr>';
     }
-    return '<w:p><w:pPr>' + pBdr + '<w:spacing w:after="80" w:line="240" w:lineRule="auto"/>' + (nextPb ? sectPr('rId2') : '') + '</w:pPr>' +
+    /* brk 标记（末步标题段）：新起一页 */
+    var brk = p.some(function(r){ return r.brk; }) ? '<w:pageBreakBefore/>' : '';
+    return '<w:p><w:pPr>' + brk + pBdr + '<w:spacing w:after="80" w:line="240" w:lineRule="auto"/>' + (nextPb ? sectPr('rId2') : '') + '</w:pPr>' +
       p.map(function(r){ return runXml(r, inLookup ? '18' : '21'); }).join('') + '</w:p>';
   }).join('');
   var documentXml =
@@ -1703,7 +1698,7 @@ function docToDocxBlob(doc, resolve, headerTotal){
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
     '<w:docDefaults><w:rPrDefault><w:rPr>' +
-    '<w:rFonts w:ascii="Microsoft YaHei" w:eastAsia="微软雅黑" w:hAnsi="Microsoft YaHei"/>' +
+    '<w:rFonts w:ascii="SimSun" w:eastAsia="SimSun" w:hAnsi="SimSun"/>' +
     '<w:sz w:val="21"/><w:szCs w:val="21"/>' +   /* 五号 10.5pt */
     '</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>' +
     '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
@@ -1799,6 +1794,7 @@ if(typeof document !== 'undefined'){
       ? '<ol><li>点屏幕右上角的「···」</li><li>选择「在 Safari 打开」</li><li>在 Safari 里再点「导出 Word」或「打印 / 导出 PDF」</li></ol>'
       : '<ol><li>点屏幕右上角的「···」</li><li>选择「在浏览器打开」</li><li>在浏览器里再点「导出 Word」或「打印 / 导出 PDF」</li></ol>';
     wxMask.style.display = '';
+    document.getElementById('wxClose').focus();   /* 打开遮罩时焦点移入关闭按钮 */
     return true;
   }
   if(isWechat){
@@ -1808,8 +1804,18 @@ if(typeof document !== 'undefined'){
   wxMask.addEventListener('click', function(e){
     if(e.target === wxMask || e.target.id === 'wxClose') wxMask.style.display = 'none';
   });
+  /* 遮罩无障碍：Esc 可关；打开时焦点移入关闭按钮 */
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && wxMask.style.display !== 'none') wxMask.style.display = 'none';
+  });
 
   /* ---- 嘉宾动态行 ---- */
+  /* 每组嘉宾最多 2 位（仪式惯例：发行人/主承销商各至多两位上台），满 2 位隐藏增加按钮 */
+  function syncGuestCap(){
+    [[clientGuestRows, addClientGuest], [issuerGuestRows, addIssuerGuest]].forEach(function(pair){
+      pair[1].style.display = pair[0].querySelectorAll('.guest-row').length >= 2 ? 'none' : '';
+    });
+  }
   function addGuestRow(container, g){
     var row = document.createElement('div');
     row.className = 'guest-row';
@@ -1820,8 +1826,9 @@ if(typeof document !== 'undefined'){
     row.querySelector('.g-title').value = (g && g.title) || '';
     row.querySelector('.g-name').value = (g && g.name) || '';
     row.querySelector('.g-honor').value = (g && g.honor) || '先生';
-    row.querySelector('.btn-del').addEventListener('click', function(){ row.remove(); });
+    row.querySelector('.btn-del').addEventListener('click', function(){ row.remove(); syncGuestCap(); });
     container.appendChild(row);
+    syncGuestCap();
   }
   function setGuestRows(container, guests){
     container.innerHTML = '';
@@ -2013,7 +2020,7 @@ if(typeof document !== 'undefined'){
 
   /* 手工清空某字段后恢复自动同步 */
   function resyncField(id){
-    var m = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|leadA|assign)$/);
+    var m = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
     if(!m) return;
     var prefix = m[1], kind = m[2];
     if(kind === 'num' || kind === 'tail'){
@@ -2033,13 +2040,13 @@ if(typeof document !== 'undefined'){
       syncLastFinal(prefix);
     }
     /* 尾数/最高位被清空时，同步重算最终号码（避免残留旧值） */
-    if(kind === 'tail' || kind === 'lead' || kind === 'leadA' || kind === 'assign') syncLastFinal(prefix);
+    if(kind === 'tail' || kind === 'lead' || kind === 'assign') syncLastFinal(prefix);
   }
 
-  /* 最后一步：尾数 + 最高位（A 分配位/A 摇出位优先，否则 B 摇出位）→ 自动拼装最终号码 */
+  /* 最后一步：尾数 + 最高位（系统自动分配位优先，否则机摇位）→ 自动拼装最终号码 */
   function syncLastFinal(prefix){
     var tail = liveState.values[prefix + 'tail'];
-    var lead = liveState.values[prefix + 'assign'] || liveState.values[prefix + 'leadA'] || liveState.values[prefix + 'lead'];
+    var lead = liveState.values[prefix + 'assign'] || liveState.values[prefix + 'lead'];
     var fin = (tail && lead && /^\d$/.test(lead) && tail.length === liveV.D - 1) ? lead + tail : null;
     syncAuto(prefix + 'final', fin);
   }
@@ -2115,7 +2122,10 @@ if(typeof document !== 'undefined'){
       var asm = assembleNumber(prefix, lv.N, liveState.values);
       syncAuto(/^last_\d+$/.test(prefix) ? prefix + 'tail' : prefix + 'num', asm);
       var g = liveGroupMap[prefix];
-      if(g && g.m > 1) syncAuto(prefix + 'exp', asm ? expandB(asm, g.interval, g.m, lv.N).join(' ') : null);
+      /* 基本号被手工钉住时，展开以钉住值为基准（防"钉住A、展开按数字位B"的自相矛盾） */
+      var baseNum = liveState.values[prefix + 'num'] || '';
+      var expBase = (liveState.pinned[prefix + 'num'] && baseNum) ? baseNum : asm;
+      if(g && g.m > 1) syncAuto(prefix + 'exp', expBase ? expandB(expBase, g.interval, g.m, lv.N).join(' ') : null);
       if(/^last_\d+$/.test(prefix)) syncLastFinal(prefix);
       if(ch){
         var next = scriptDoc.querySelector('input[data-live="' + prefix + 'd' + (lv.pos + 1) + '"]');
@@ -2123,7 +2133,7 @@ if(typeof document !== 'undefined'){
       }
     }else{
       var val = el.value;
-      var m2 = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|leadA|assign)$/);
+      var m2 = id.match(/^(g\d+|p2_\d+|last_\d+)(num|exp|tail|final|lead|assign)$/);
       if(val.trim() === ''){
         delete liveState.values[id];
         delete liveState.pinned[id];
@@ -2136,7 +2146,7 @@ if(typeof document !== 'undefined'){
           var g = liveGroupMap[prefix];
           /* 手工填基本号时，B 型展开行同步自动计算（展开行未被钉住才同步） */
           if(kind === 'num' && g && g.m > 1) syncAuto(prefix + 'exp', expandB(val.trim(), g.interval, g.m, g.N).join(' '));
-          if(kind === 'tail' || kind === 'lead' || kind === 'leadA' || kind === 'assign') syncLastFinal(prefix);
+          if(kind === 'tail' || kind === 'lead' || kind === 'assign') syncLastFinal(prefix);
         }
       }
     }
@@ -2147,10 +2157,15 @@ if(typeof document !== 'undefined'){
   scriptDoc.addEventListener('click', function(e){
     var btn = e.target && e.target.closest ? e.target.closest('[data-addround]') : null;
     if(!btn || !liveState) return;
-    if(btn.getAttribute('data-addround') === 'p2') liveState.p2Rounds++;
+    var where = btn.getAttribute('data-addround');
+    if(where === 'p2') liveState.p2Rounds++;
     else liveState.lastRounds++;
     saveLive();
     rebuildLiveDoc();
+    /* 重建后焦点移到新一轮的第一个数字位，防键盘操作丢焦点 */
+    var r = where === 'p2' ? liveState.p2Rounds : liveState.lastRounds;
+    var first = scriptDoc.querySelector('input[data-live="' + (where === 'p2' ? 'p2_' + r : 'last_' + r) + 'd1' + '"]');
+    if(first) first.focus();
   });
 
   /* 清空已填写 */

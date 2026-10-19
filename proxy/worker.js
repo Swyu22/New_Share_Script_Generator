@@ -37,7 +37,7 @@ function withCors(resp, origin) {
   r.headers.delete('content-encoding');
   r.headers.delete('content-length');
   r.headers.set('Access-Control-Allow-Origin', origin || '*');
-  r.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  r.headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   r.headers.set('Access-Control-Allow-Headers', '*');
   r.headers.append('Vary', 'Origin');
   return r;
@@ -74,6 +74,7 @@ export default {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         upstream = await fetch(t.toString(), {
+          method: request.method,   /* GET/HEAD 原样透传（HEAD 不取全量 body） */
           headers: {
             /* 巨潮 WAF（2026-09 起）：要求 Referer 为自家域名，且拒绝 Chrome 形态 UA */
             'User-Agent': 'Mozilla/5.0',
@@ -89,6 +90,9 @@ export default {
       /* 重定向：目标主机重新过白名单再跟随，防白名单被开放重定向绕过；至多 3 次防循环 */
       if (upstream.status >= 300 && upstream.status < 400) {
         const loc = upstream.headers.get('Location');
+        if (!loc) {   /* 3xx 无 Location（WAF/限流可能出现的非标准响应）：不追随 */
+          return withCors(Response.json({ error: 'redirect without location' }, { status: 502 }), corsOrigin);
+        }
         let nt;
         try { nt = new URL(loc, t); } catch { nt = null; }
         if (!nt || !isAllowedHost(nt) || ++redirects > 3) {
