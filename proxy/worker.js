@@ -95,8 +95,11 @@ export default {
         }
         let nt;
         try { nt = new URL(loc, t); } catch { nt = null; }
-        if (!nt || !isAllowedHost(nt) || ++redirects > 3) {
+        if (!nt || !isAllowedHost(nt)) {
           return withCors(Response.json({ error: 'redirect host not allowed' }, { status: 403 }), corsOrigin);
+        }
+        if (++redirects > 3) {   /* 循环保护与主机白名单分开报错 */
+          return withCors(Response.json({ error: 'too many redirects' }, { status: 502 }), corsOrigin);
         }
         t = nt;
         attempt--;   /* 重定向不消耗重试次数 */
