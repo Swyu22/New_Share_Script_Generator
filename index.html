@@ -175,8 +175,14 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
 .lookup-card{margin-top:22px}
 .lookup-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px}
 .lookup-head h2{font-size:1.05rem}
-/* 页眉速查表两行（加千亿/万亿后较长）：打印与 Word 用小五 9pt 保证两行排完 */
+/* 页眉速查表两行（加千亿/万亿后较长）：打印与 Word 用小五 9pt 保证两行排完；
+   每个“数字→分位”作为不可拆分条目，窄屏只在条目之间折行 */
 .page-header .cheat{font-size:.98rem}
+.page-header .cheat-label,.page-header .cheat-item{display:inline-block;white-space:nowrap}
+.page-header .cheat-label,.page-header .cheat-indent{width:5em}   /* 标签与缩进同宽，桌面/打印时 6 与 1 精确对齐 */
+.page-header .cheat-item{margin-right:.6em}
+.page-header .cheat-item:last-child{margin-right:0}
+.page-header .cheat-indent{display:inline-block}
 @media print{
   @page{size:A4;margin:25mm}   /* 与 Word 一致：A4、2.5cm 页边距 */
   .page-header{font-size:10.5pt;background:#fff;padding:4pt 0;border-bottom:1px dashed #bbb;margin:0}
@@ -211,6 +217,10 @@ footer{text-align:center;color:var(--muted);font-size:.8rem;margin-top:26px}
   th,td{padding:6px 8px}
   .script-doc{padding:18px 14px}
   .script-doc p{font-size:.92rem;line-height:2}
+  /* 窄屏速查表按完整条目折行；取消仅适用于桌面单行的第二行缩进 */
+  .page-header .cheat{display:flex;flex-wrap:wrap;gap:3px 10px}
+  .page-header .cheat-indent{display:none}
+  .page-header .cheat-item{margin-right:0}
   /* iOS Safari 对 <16px 输入框聚焦时强制放大页面：移动端输入框统一 16px 防缩放跳动 */
   .input-card input,.input-card select,.script-doc .lv{font-size:16px}
   /* 记录表格 10 列在窄屏等分收窄，防横向溢出 */
@@ -627,9 +637,21 @@ function computeLive(v, st){
   var drawnLeads = [];
   for(var rl = 1; rl <= (st.lastRounds || 1); rl++){
     var nf = (st.values['last_' + rl + 'final'] || '').trim();
+    /* 手工尾号/最高位可独立于完整号码填写：先做自身格式校验，避免非法值静默绕过球池提示 */
+    var tailStr = (st.values['last_' + rl + 'tail'] || '').trim();
+    var leadStr = (st.values['last_' + rl + 'lead'] || '').trim();
+    var assignStr = (st.values['last_' + rl + 'assign'] || '').trim();
+    if(tailStr && (!/^\d+$/.test(tailStr) || tailStr.length !== v.D - 1)){
+      rows.push({id:'last_' + rl + 'tail', label:'最后一步·第' + rl + '轮', N:v.D, nums:tailStr, add:'', status:'尾号须为 ' + (v.D - 1) + ' 位数字', bad:true}); continue;
+    }
+    if(assignStr && !/^\d$/.test(assignStr)){
+      rows.push({id:'last_' + rl + 'assign', label:'最后一步·第' + rl + '轮', N:v.D, nums:assignStr, add:'', status:'自动分配最高位须为 1 位数字', bad:true}); continue;
+    }
+    if(leadStr && !/^\d$/.test(leadStr)){
+      rows.push({id:'last_' + rl + 'lead', label:'最后一步·第' + rl + '轮', N:v.D, nums:leadStr, add:'', status:'机摇最高位须为 1 位数字', bad:true}); continue;
+    }
     /* 可用号球：按尾数与配号总数后 D−1 位比较定基集（大于→0..首位−1，小于等于→0..首位），
        再减去此前各轮已摇出的最高位（末位球摇出不再放回，每球只有一次机会） */
-    var tailStr = (st.values['last_' + rl + 'tail'] || '').trim();
     if(!tailStr && nf && nf.length === v.D) tailStr = nf.slice(1);
     var T = null, pool = null;
     if(/^\d+$/.test(tailStr) && tailStr.length === v.D - 1){
@@ -644,16 +666,20 @@ function computeLive(v, st){
     if(!nf){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:'', add:'', status: pool ? (pool.length === 1 ? '仅剩 ' + pool[0] + ' 号球（系统自动分配）' : '可用号球：' + pool.join('、')) : ''}); continue; }
     if(!/^\d+$/.test(nf) || nf.length > v.D){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'格式有误', bad:true}); continue; }
     if(nf.length < v.D) nf = ('000000000000' + nf).slice(-v.D);   /* 补前导零至配号位数（完整号码约定为 D 位） */
+    if(tailStr && nf.slice(1) !== tailStr){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'完整号码与已填尾号不一致，请核对', bad:true}); continue; }
+    if(assignStr && nf.charAt(0) !== assignStr){ rows.push({id:'last_' + rl + 'assign', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'完整号码与自动分配最高位不一致，请核对', bad:true}); continue; }
+    if(!assignStr && leadStr && nf.charAt(0) !== leadStr){ rows.push({id:'last_' + rl + 'lead', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'完整号码与机摇最高位不一致，请核对', bad:true}); continue; }
     var xf = Number(nf);
     if(xf < 1 || xf > total){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'超出配号区间，无效需重摇', bad:true}); continue; }
     var badF = collideAny(xf, v.D, produced);
     if(badF){ rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, add:'', status:'与先前中签号码重复，无效需重摇', bad:true}); continue; }
     var leadX = Number(nf.charAt(0));
     var poolWarn = pool && pool.indexOf(leadX) < 0 ? '最高位 ' + leadX + ' 不在可用号球范围（可用：' + pool.join('、') + '），请核对' : null;
+    var overWarn = used >= wc ? '本轮覆盖 1 个，超出剩余名额（剩 0 个），请核对现场系统' : null;
     produced.push({N:v.D, x:xf}); used += 1;
     /* 机摇（本轮可选号球多于 1 个）摇出的号球不再放回；系统自动分配（仅剩 1 个可选）不消耗号球 */
     if(T !== null && pool && pool.length > 1) drawnLeads.push(leadX);
-    rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status: poolWarn || '有效', warn: !!poolWarn});
+    rows.push({id:'last_' + rl + 'final', label:'最后一步·第' + rl + '轮', N:v.D, nums:nf, each:'1', add:1, status: poolWarn || overWarn || '有效', warn: !!(poolWarn || overWarn)});
   }
 
   var overBy = used > wc ? used - wc : 0;
@@ -1454,9 +1480,11 @@ function escXml(s){
 /* 属性上下文转义（input value="…"）：防引号突破属性 */
 function escAttr(s){ return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
-/* 页眉块 HTML（预览与打印共用）：左对齐三行速查表——行2 以 5 个全角空格缩进（6 与行1 的 1 上下对齐），
-   行3 红字配号总数（首位数字大两号并加粗；占位符不放大；total 传 null 时不显示该行，用于查阅表页） */
+/* 页眉块 HTML（预览与打印共用）：左对齐三行速查表——行2 以 5em 缩进（6 与行1 的 1 上下对齐），
+   行3 红字配号总数（首位数字大两号并加粗；占位符不放大；total 传 null 时不显示该行，用于查阅表页）；
+   条目用 inline-block 包裹，窄屏只在完整条目之间折行 */
 function pageHeaderHtml(total){
+  function items(arr){ return arr.map(function(t){ return '<span class="cheat-item">' + t + '</span>'; }).join(''); }
   var totalLine = '';
   if(total != null){
     var totalStr = String(total);
@@ -1467,8 +1495,8 @@ function pageHeaderHtml(total){
     totalLine = '<div class="v">配号总数：' + totalHtml + '</div>';
   }
   return '<div class="page-header">' +
-    '<div class="cheat">末位尾数：1→十分之&nbsp;&nbsp;2→百分之&nbsp;&nbsp;3→千分之&nbsp;&nbsp;4→万分之&nbsp;&nbsp;5→十万分之</div>' +
-    '<div class="cheat">　　　　　6→百万分之&nbsp;&nbsp;7→千万分之&nbsp;&nbsp;8→亿分之&nbsp;&nbsp;9→十亿分之&nbsp;&nbsp;10→百亿分之&nbsp;&nbsp;11→千亿分之&nbsp;&nbsp;12→万亿分之</div>' +
+    '<div class="cheat"><span class="cheat-label">末位尾数：</span>' + items(['1→十分之','2→百分之','3→千分之','4→万分之','5→十万分之']) + '</div>' +
+    '<div class="cheat"><span class="cheat-indent" aria-hidden="true"></span>' + items(['6→百万分之','7→千万分之','8→亿分之','9→十亿分之','10→百亿分之','11→千亿分之','12→万亿分之']) + '</div>' +
     totalLine + '</div>';
 }
 
@@ -1606,7 +1634,7 @@ function headerXml(total){
     '</w:hdr>';
 }
 
-/* 由文档模型生成真实 .docx：A4、2.5cm 页边距、五号微软雅黑、1.0 倍行距，红绿灰三色与网页一致；
+/* 由文档模型生成真实 .docx：A4、2.5cm 页边距、五号宋体（SimSun）、1.0 倍行距，红绿灰三色与网页一致；
    live run 经 resolve 带当前值（空则留白），addBtn 段整段跳过；
    主持稿为单 section：header1（速查表+红字配号总数）逐页显示；
    查阅表固定模板独立导出（standaloneLookup）：全文小五 9pt，仅挂 header2（速查表无配号总数） */
@@ -1829,9 +1857,14 @@ if(typeof document !== 'undefined'){
   wxMask.addEventListener('click', function(e){
     if(e.target === wxMask || e.target.id === 'wxClose') wxCloseMask();
   });
-  /* 遮罩无障碍：Esc 可关；打开时焦点移入关闭按钮 */
+  /* 遮罩无障碍：Esc 可关；打开时焦点移入关闭按钮；Tab 在唯一可聚焦按钮上循环，防操作到底层页面 */
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && wxMask.style.display !== 'none') wxCloseMask();
+    if(wxMask.style.display === 'none') return;
+    if(e.key === 'Escape'){ wxCloseMask(); return; }
+    if(e.key === 'Tab'){
+      e.preventDefault();
+      document.getElementById('wxClose').focus();
+    }
   });
 
   /* ---- 嘉宾动态行 ---- */
@@ -2301,7 +2334,12 @@ if(typeof document !== 'undefined'){
         var cdn = PDFJS_CDNS[i++];
         var s = document.createElement('script');
         s.src = cdn.lib;
-        s.onload = function(){ window.pdfjsLib.GlobalWorkerOptions.workerSrc = cdn.worker; resolve(); };
+        s.onload = function(){
+          /* HTTP 200 也可能来自门户劫持/空脚本：没有真正的 PDF.js 时按失败切换 CDN，避免 Promise 永久挂起 */
+          if(!window.pdfjsLib || !window.pdfjsLib.GlobalWorkerOptions){ tryNext(); return; }
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = cdn.worker;
+          resolve();
+        };
         s.onerror = tryNext;
         document.head.appendChild(s);
       }
@@ -2437,6 +2475,9 @@ if(typeof document !== 'undefined'){
       document.getElementById('fShares').value = r.fields.shares;
       document.getElementById('fTotal').value = r.fields.total;
       document.getElementById('fRate').value = r.fields.rate;
+      /* 中签数与配号区间均由本次公告派生：清空上一份公告/手工旧值，强制按新数据重新自动计算（嘉宾与公证信息仍保留） */
+      document.getElementById('fWinCount').value = '';
+      document.getElementById('fRange').value = '';
       var lines = ['解析成功，已填充以下字段，请核对：',
         '发行公司：' + r.fields.company,
         '主承销商：' + r.fields.client,

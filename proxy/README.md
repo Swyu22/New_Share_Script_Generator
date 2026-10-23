@@ -2,7 +2,7 @@
 
 巨潮 `static.cninfo.com.cn` 的 CORS 是白名单制（只放行 cninfo 自家域名），
 网页无法直接抓取公告 PDF。把 `worker.js` 部署到你自己的 Cloudflare 账号，
-页面里填上 Worker 地址，URL 解析即可 100% 可用。免费额度（每天 10 万次请求）绰绰有余。
+并将 Worker 地址写入 `index.html` 的 `PDF_PROXY` 常量。免费额度（每天 10 万次请求）绰绰有余。
 
 ## 方式一：网页端部署（推荐，无需安装任何工具）
 
@@ -21,7 +21,7 @@ npx wrangler login          # 首次使用：浏览器弹出 Cloudflare 授权�
 npx wrangler deploy worker.js --name share-script-pdf-proxy --compatibility-date 2024-09-25
 ```
 
-部署成功后 wrangler 会输出 Worker 地址，填入页面输入框即可。
+部署成功后 wrangler 会输出 Worker 地址；本项目已内置，自用部署时更新 `index.html` 的 `PDF_PROXY` 常量。
 
 ## 验证
 

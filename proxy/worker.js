@@ -87,8 +87,9 @@ export default {
       } catch {
         return withCors(Response.json({ error: 'upstream fetch failed' }, { status: 502 }), corsOrigin);
       }
-      /* 重定向：目标主机重新过白名单再跟随，防白名单被开放重定向绕过；至多 3 次防循环 */
-      if (upstream.status >= 300 && upstream.status < 400) {
+      /* 仅处理真正的重定向状态码（304 等非重定向响应直接透传）；
+         目标主机重新过白名单再跟随，防白名单被开放重定向绕过；至多 3 次防循环 */
+      if ([301, 302, 303, 307, 308].includes(upstream.status)) {
         const loc = upstream.headers.get('Location');
         if (!loc) {   /* 3xx 无 Location（WAF/限流可能出现的非标准响应）：不追随 */
           return withCors(Response.json({ error: 'redirect without location' }, { status: 502 }), corsOrigin);
